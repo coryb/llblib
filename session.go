@@ -3,11 +3,13 @@ package llblib
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"sync/atomic"
 
+	"github.com/coryb/llblib/sockproxy"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session"
@@ -17,13 +19,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
 	fstypes "github.com/tonistiigi/fsutil/types"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 )
 
 func NewSession(cwd string) *Session {
 	return &Session{
-		cwd:       cwd,
-		localDirs: map[string]string{},
+		cwd:          cwd,
+		localDirs:    map[string]string{},
+		agentConfigs: map[string]sockproxy.AgentConfig{},
 	}
 }
 
@@ -33,27 +37,29 @@ type solveStates struct {
 }
 
 type Session struct {
-	cwd         string
-	err         error
-	localDirs   map[string]string
-	attachables []session.Attachable
+	cwd          string
+	err          error
+	localDirs    map[string]string
+	attachables  []session.Attachable
+	helpers      []func(ctx context.Context) (release func() error, err error)
+	agentConfigs map[string]sockproxy.AgentConfig
 
 	solves []solveStates
 }
 
-func (l *Session) Local(name string, opts ...llb.LocalOption) llb.State {
-	if l.err != nil {
+func (s *Session) Local(name string, opts ...llb.LocalOption) llb.State {
+	if s.err != nil {
 		return llb.Scratch()
 	}
 
 	absPath := name
 	if !filepath.IsAbs(absPath) {
-		absPath = filepath.Join(l.cwd, name)
+		absPath = filepath.Join(s.cwd, name)
 	}
 
 	fi, err := os.Stat(absPath)
 	if err != nil {
-		l.err = errors.Wrapf(err, "error reading %q", absPath)
+		s.err = errors.Wrapf(err, "error reading %q", absPath)
 		return llb.Scratch()
 	}
 
@@ -72,7 +78,7 @@ func (l *Session) Local(name string, opts ...llb.LocalOption) llb.State {
 
 	id, err := localID(absPath, opts...)
 	if err != nil {
-		l.err = errors.Wrap(err, "error calculating id for local")
+		s.err = errors.Wrap(err, "error calculating id for local")
 		return llb.Scratch()
 	}
 
@@ -81,7 +87,7 @@ func (l *Session) Local(name string, opts ...llb.LocalOption) llb.State {
 		llb.LocalUniqueID(id),
 	)
 
-	l.localDirs[name] = localDir
+	s.localDirs[name] = localDir
 
 	// Copy the local to scratch for better caching via buildkit
 	return llb.Scratch().File(
@@ -140,29 +146,29 @@ func (l *Session) Download(st llb.State, localDir string) {
 	})
 }
 
-func (l *Session) Build(st llb.State) {
-	l.solves = append(l.solves, solveStates{
+func (s *Session) Build(st llb.State) {
+	s.solves = append(s.solves, solveStates{
 		state: st,
 	})
 }
 
-func (l *Session) Execute(ctx context.Context, cln *client.Client) error {
-	if len(l.solves) == 0 {
+func (s *Session) Execute(ctx context.Context, cln *client.Client) error {
+	if len(s.solves) == 0 {
 		return nil
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if l.err != nil {
-		return errors.Wrap(l.err, "error occurred in llb state")
+	if s.err != nil {
+		return errors.Wrap(s.err, "error occurred in llb state")
 	}
 
-	attachables := make([]session.Attachable, len(l.attachables))
-	copy(attachables, l.attachables)
+	attachables := make([]session.Attachable, len(s.attachables))
+	copy(attachables, s.attachables)
 
 	dirSource := filesync.StaticDirSource{}
-	for name, localDir := range l.localDirs {
+	for name, localDir := range s.localDirs {
 		dirSource[name] = filesync.SyncedDir{
 			Dir: localDir,
 			Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
@@ -174,22 +180,40 @@ func (l *Session) Execute(ctx context.Context, cln *client.Client) error {
 	}
 	attachables = append(attachables, filesync.NewFSSyncProvider(dirSource))
 
-	s, err := session.NewSession(ctx, "llblib", "")
+	releasers := []func() error{}
+	for _, helper := range s.helpers {
+		release, err := helper(ctx)
+		if err != nil {
+			return err
+		}
+		releasers = append(releasers, release)
+	}
+
+	// Attach ssh forwarding providers to the session.
+	if len(s.agentConfigs) > 0 {
+		sp, err := sockproxy.NewProvider(maps.Values(s.agentConfigs))
+		if err != nil {
+			return errors.Wrap(err, "failed to create provider for forward")
+		}
+		attachables = append(attachables, sp)
+	}
+
+	bkSess, err := session.NewSession(ctx, "llblib", "")
 	if err != nil {
 		return err
 	}
 	for _, a := range attachables {
-		s.Allow(a)
+		bkSess.Allow(a)
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		return s.Run(ctx, cln.Dialer())
+		return bkSess.Run(ctx, cln.Dialer())
 	})
 
-	var busy int32 = int32(len(l.solves))
+	var busy int32 = int32(len(s.solves))
 
-	for _, solve := range l.solves {
+	for _, solve := range s.solves {
 		solve := solve
 		def, err := solve.state.Marshal(ctx)
 		if err != nil {
@@ -205,14 +229,19 @@ func (l *Session) Execute(ctx context.Context, cln *client.Client) error {
 		eg.Go(func() error {
 			defer func() {
 				if atomic.AddInt32(&busy, -1) == 0 {
-					s.Close()
+					for _, r := range releasers {
+						if err := r(); err != nil {
+							log.Printf("release error: %s", err)
+						}
+					}
+					bkSess.Close()
 				}
 			}()
 
 			solveOpt := client.SolveOpt{
-				SharedSession:         s,
+				SharedSession:         bkSess,
 				SessionPreInitialized: true,
-				LocalDirs:             l.localDirs,
+				LocalDirs:             s.localDirs,
 				Session:               attachables,
 				Exports:               solve.exports,
 			}

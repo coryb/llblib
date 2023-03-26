@@ -43,12 +43,8 @@ func (pm persistentMounts) Run(opts ...llb.RunOption) MountPropagator {
 			}
 			targets = append(targets, eim.Target)
 		}
-		// log.Printf("Mounts: % #v", pretty.Formatter(ei))
 		runOpts = append(runOpts, mountPropagatorRunOption{&ei})
-		// runOpts = append(runOpts, o)
 	}
-
-	llb.AddMount("/foobar", llb.Scratch())
 
 	execState := pm.root.Run(runOpts...)
 	pm.root = execState.Root()
