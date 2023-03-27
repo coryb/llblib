@@ -13,6 +13,7 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/filesync"
+	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
@@ -24,6 +25,7 @@ import (
 type Solver interface {
 	Local(name string, opts ...llb.LocalOption) llb.State
 	Forward(src, dest string, opts ...ForwardOption) llb.RunOption
+	AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.RunOption
 
 	Download(st llb.State, localDir string) SolveRequest
 	Build(st llb.State) SolveRequest
@@ -53,6 +55,7 @@ func NewSolver(opts ...SolverOption) Solver {
 	s := solver{
 		cwd:          cwd,
 		localDirs:    map[string]string{},
+		secrets:      map[string]secretsprovider.Source{},
 		agentConfigs: map[string]sockproxy.AgentConfig{},
 	}
 	for _, o := range opts {
@@ -74,6 +77,7 @@ type solver struct {
 	cwd          string
 	err          error
 	localDirs    map[string]string
+	secrets      map[string]secretsprovider.Source
 	attachables  []bksess.Attachable
 	helpers      []func(ctx context.Context) (release func() error, err error)
 	agentConfigs map[string]sockproxy.AgentConfig
@@ -169,8 +173,18 @@ func firstUpInterface() string {
 	return "no-valid-interface"
 }
 
-func (l *solver) Download(st llb.State, localDir string) SolveRequest {
-	l.attachables = append(l.attachables, filesync.NewFSSyncTargetDir(localDir))
+func (s *solver) AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.RunOption {
+	id := digest.FromString(src).String()
+	s.secrets[id] = secretsprovider.Source{
+		ID:       id,
+		FilePath: src,
+	}
+	opts = append(opts, llb.SecretID(id))
+	return llb.AddSecret(dest, opts...)
+}
+
+func (s *solver) Download(st llb.State, localDir string) SolveRequest {
+	s.attachables = append(s.attachables, filesync.NewFSSyncTargetDir(localDir))
 	return SolveRequest{
 		state: st,
 		exports: []client.ExportEntry{{
@@ -215,6 +229,15 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 		}
 	}
 	attachables = append(attachables, filesync.NewFSSyncProvider(dirSource))
+
+	// Attach secret providers to the session.
+	if len(s.secrets) > 0 {
+		fileStore, err := secretsprovider.NewStore(maps.Values(s.secrets))
+		if err != nil {
+			return nil, err
+		}
+		attachables = append(attachables, secretsprovider.NewSecretProvider(fileStore))
+	}
 
 	// Attach ssh forwarding providers to the session.
 	if len(s.agentConfigs) > 0 {

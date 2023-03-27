@@ -33,6 +33,7 @@ func main() {
 		llb.AddMount("/git", llb.Git("https://github.com/moby/buildkit.git", "baaf67ba976460a51ef198abab88baae376c32d8", llb.KeepGitDir())),
 		llb.AddMount("/http", llb.HTTP("https://raw.githubusercontent.com/moby/buildkit/master/README.md", llb.Filename("README.md"), llb.Chmod(0o600))),
 		llb.AddMount("/image", llb.Image("busybox:latest@sha256:acaddd9ed544f7baf3373064064a51250b14cfe3ec604d65765a53da5958e5f5", llb.Platform(platform))),
+		slv.AddSecretFile("go.mod", "/secret/go.mod"),
 	}
 
 	req := slv.Breakpoint(root, llb.Shlex("/bin/sh"), mounts)(llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr))
