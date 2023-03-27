@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/containerd/console"
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
@@ -13,31 +14,7 @@ import (
 )
 
 func main() {
-	setup := []string{
-		"apk add -U go",
-	}
-
-	source := []string{"go.mod", "go.sum", "**/*.go"}
-	steps := []string{
-		"go mod download",
-		"go build ./examples/build",
-		"mount",
-		"touch /scratch/foobar",
-		"find /scratch",
-	}
-
 	localCwd, _ := os.Getwd()
-	env := map[string]string{
-		"CGO_ENABLED": "0",
-		"GOPATH":      "/go", // for go mod cache
-		"GOOS":        runtime.GOOS,
-		"GOARCH":      runtime.GOARCH,
-	}
-	cacheID := "me"
-	cachePaths := []string{
-		"/root/.cache/go-build",
-		"/go/pkg/mod",
-	}
 	platform := ocispecs.Platform{OS: "linux", Architecture: runtime.GOARCH}
 
 	// ----
@@ -49,9 +26,7 @@ func main() {
 	}
 
 	slv := llblib.NewSolver(llblib.WithCwd(localCwd))
-
 	root := llb.Image("alpine:latest@sha256:e2e16842c9b54d985bf1ef9242a313f36b856181f188de21313820e177002501", llb.Platform(platform)).Dir("/")
-
 	mounts := llblib.RunOptions{
 		llb.AddMount("/scratch", llb.Scratch()),
 		llb.AddMount("/local", slv.Local(".", llb.IncludePatterns([]string{"*"}), llb.ExcludePatterns([]string{"*"}))),
@@ -60,32 +35,9 @@ func main() {
 		llb.AddMount("/image", llb.Image("busybox:latest@sha256:acaddd9ed544f7baf3373064064a51250b14cfe3ec604d65765a53da5958e5f5", llb.Platform(platform))),
 	}
 
-	for _, cmd := range setup {
-		root = root.Run(
-			llb.Shlex(cmd),
-			llblib.AddEnvs(env),
-			llblib.AddCacheMounts(cachePaths, cacheID, llb.CacheMountPrivate),
-			mounts,
-		).Root()
-	}
+	req := slv.Breakpoint(root, llb.Shlex("/bin/sh"), mounts)(llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr))
 
-	root = root.File(llb.Mkfile("/helper", 0o755, []byte("#!/bin/sh\necho hi\n")))
-
-	workspace := slv.Local(".", llb.IncludePatterns(source))
-
-	p := llblib.Persistent(root, mounts, llb.AddMount(localCwd, workspace))
-	for _, step := range steps {
-		p = p.Run(
-			llb.Shlex(step),
-			llb.Dir(localCwd),
-			llblib.AddEnvs(env),
-			llblib.AddCacheMounts(cachePaths, cacheID, llb.CacheMountPrivate),
-		)
-	}
-
-	req := slv.Download(llb.Diff(workspace, p.GetMount(localCwd)), ".")
-
-	prog := progress.NewProgress()
+	prog := progress.NewProgress(progress.WithConsole(console.Current()))
 	defer prog.Release()
 
 	sess, err := slv.NewSession(ctx, cli)
@@ -94,8 +46,8 @@ func main() {
 	}
 	defer sess.Release()
 
-	_, err = sess.Solve(ctx, req, prog)
+	_, err = sess.Build(ctx, req, prog)
 	if err != nil {
-		log.Fatalf("solve failed: %+v", err)
+		log.Fatalf("build failed: %+v", err)
 	}
 }
