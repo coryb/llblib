@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/coryb/llblib"
+	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -25,15 +26,15 @@ func main() {
 		log.Fatalf("Failed to create client: %s", err)
 	}
 
-	sess := llblib.NewSession(localCwd)
+	slv := llblib.NewSolver(llblib.WithCwd(localCwd))
 
 	root := llb.Image("alpine:latest@sha256:e2e16842c9b54d985bf1ef9242a313f36b856181f188de21313820e177002501", llb.Platform(platform)).Dir("/")
 	root = root.Run(llb.Shlex("apk add -U curl socat")).Root()
 
-	sess.Build(
+	req := slv.Build(
 		root.Run(
 			llb.Shlex("curl -sf --unix /tmp/forward.sock -v http://unix -o /tmp/special"),
-			sess.Forward("tcp://127.0.0.1:1234", "/tmp/forward.sock"),
+			slv.Forward("tcp://127.0.0.1:1234", "/tmp/forward.sock"),
 			llblib.IgnoreCache(),
 		).Run(
 			llb.Args([]string{"sh", "-c", `test "$(cat /tmp/special)" = "message-from-host"`}),
@@ -54,7 +55,16 @@ func main() {
 		)
 	}()
 
-	err = sess.Execute(ctx, cli)
+	prog := progress.NewProgress()
+	defer prog.Release()
+
+	sess, err := slv.NewSession(ctx, cli)
+	if err != nil {
+		log.Fatalf("failed to create session: %+v", err)
+	}
+	defer sess.Release()
+
+	_, err = sess.Solve(ctx, req, prog)
 	if err != nil {
 		log.Fatalf("solve failed: %+v", err)
 	}

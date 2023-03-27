@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/docker/docker v23.0.0-rc.1+incompatible
+	github.com/kr/pretty v0.2.0
 	github.com/moby/buildkit v0.11.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20220303224323-02efb9a75ee1
@@ -12,6 +13,7 @@ require (
 	golang.org/x/crypto v0.2.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/sync v0.1.0
+	golang.org/x/sys v0.3.0
 	google.golang.org/grpc v1.50.1
 )
 
@@ -49,7 +51,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.4.1 // indirect
 	go.opentelemetry.io/proto/otlp v0.12.0 // indirect
 	golang.org/x/net v0.4.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/term v0.3.0 // indirect
 	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/genproto v0.0.0-20220706185917-7780775163c4 // indirect

@@ -42,7 +42,7 @@ func (c Chmod) SetSecretOption(si *llb.SecretInfo) {
 	si.Mode = (int)(c)
 }
 
-func (s *Session) Forward(src, dest string, opts ...ForwardOption) llb.RunOption {
+func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption {
 	noop := RunOptions{}
 	if s.err != nil {
 		return noop
@@ -72,14 +72,19 @@ func (s *Session) Forward(src, dest string, opts ...ForwardOption) llb.RunOption
 		id = digest.FromString(localPath).String()
 	} else if srcURL.Scheme == "tcp" {
 		id = digest.FromString(src).String()
-		dir, err := ioutil.TempDir("", "forward")
-		if err != nil {
-			s.err = errors.Wrap(err, "failed to create tmp dir for forwarding sock")
-			return noop
-		}
-
-		localPath = filepath.Join(dir, "proxy.sock")
 		helper := func(ctx context.Context) (release func() error, err error) {
+			dir, err := ioutil.TempDir("", "forward")
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to create tmp dir for forwarding sock")
+			}
+
+			localPath = filepath.Join(dir, "proxy.sock")
+			s.agentConfigs[id] = sockproxy.AgentConfig{
+				ID:    id,
+				SSH:   false,
+				Paths: []string{localPath},
+			}
+
 			dialerFunc := func() (net.Conn, error) {
 				var dialer net.Dialer
 				conn, err := dialer.DialContext(ctx, srcURL.Scheme, srcURL.Host)
@@ -98,6 +103,7 @@ func (s *Session) Forward(src, dest string, opts ...ForwardOption) llb.RunOption
 			var g errgroup.Group
 
 			release = func() error {
+				delete(s.agentConfigs, id)
 				defer os.RemoveAll(dir)
 
 				err := l.Close()
@@ -128,12 +134,6 @@ func (s *Session) Forward(src, dest string, opts ...ForwardOption) llb.RunOption
 		WithChmod(0o600),
 		llb.SSHSocketTarget(dest),
 	}, opts...)
-
-	s.agentConfigs[id] = sockproxy.AgentConfig{
-		ID:    id,
-		SSH:   false,
-		Paths: []string{localPath},
-	}
 
 	return llb.AddSSHSocket(opts...)
 }
