@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/containerd/console"
@@ -16,7 +17,7 @@ type Progress interface {
 	Sync()
 	Pause()
 	Resume()
-	Channel() chan *client.SolveStatus
+	Channel(opts ...ChannelOption) chan *client.SolveStatus
 }
 
 type ProgressOption interface {
@@ -44,7 +45,6 @@ func WithOutput(w io.Writer) ProgressOption {
 func NewProgress(opts ...ProgressOption) Progress {
 	p := &progress{
 		statusCh: make(chan *client.SolveStatus),
-		syncCh:   make(chan struct{}),
 		done:     make(chan struct{}),
 		writer:   os.Stdout,
 		seen:     map[seenKey]struct{}{},
@@ -68,13 +68,10 @@ type progress struct {
 	console  console.Console
 	writer   io.Writer
 
-	children int
-	// childMu   sync.Mutex
+	children  int
 	childCond sync.Cond
-
-	syncCh chan struct{}
-	mu     sync.Mutex
-	done   chan struct{}
+	mu        sync.Mutex
+	done      chan struct{}
 
 	seenMu sync.Mutex
 	seen   map[seenKey]struct{} // TODO this should probably be an LRU
@@ -124,9 +121,33 @@ func (p *progress) Resume() {
 	p.mu.Unlock()
 }
 
+type ChannelOption interface {
+	SetChannelOption(*channelOption)
+}
+
+type channelOptionFunc func(*channelOption)
+
+func (f channelOptionFunc) SetChannelOption(co *channelOption) {
+	f(co)
+}
+
+func Label(name string) ChannelOption {
+	return channelOptionFunc(func(co *channelOption) {
+		co.label = name
+	})
+}
+
+type channelOption struct {
+	label string
+}
+
 // Channel returns a new status channel.  This channel must be closed
 // (usually by client.Solve/client.Build) before Release is called.
-func (p *progress) Channel() chan *client.SolveStatus {
+func (p *progress) Channel(opts ...ChannelOption) chan *client.SolveStatus {
+	co := channelOption{}
+	for _, opt := range opts {
+		opt.SetChannelOption(&co)
+	}
 	ch := make(chan *client.SolveStatus)
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -150,6 +171,11 @@ func (p *progress) Channel() chan *client.SolveStatus {
 			}
 			p.seenMu.Unlock()
 			msg.Logs = keepLogs
+			if co.label != "" {
+				for _, v := range msg.Vertexes {
+					v.Name = addLabel(co.label, v.Name)
+				}
+			}
 
 			p.mu.Lock()
 			p.statusCh <- msg
@@ -161,4 +187,11 @@ func (p *progress) Channel() chan *client.SolveStatus {
 		p.childCond.Signal()
 	}()
 	return ch
+}
+
+func addLabel(label, name string) string {
+	if strings.HasPrefix(name, "[") {
+		return "[" + label + " " + name[1:]
+	}
+	return "[" + label + "] " + name
 }

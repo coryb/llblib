@@ -33,7 +33,7 @@ func (p nullProgress) Sync()    {}
 func (p nullProgress) Pause()   {}
 func (p nullProgress) Resume()  {}
 
-func (p nullProgress) Channel() chan *client.SolveStatus {
+func (p nullProgress) Channel(opts ...progress.ChannelOption) chan *client.SolveStatus {
 	ch := make(chan *client.SolveStatus)
 	go func() {
 		for range ch {
