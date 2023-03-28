@@ -65,11 +65,13 @@ func NewSolver(opts ...SolverOption) Solver {
 }
 
 type SolveRequest struct {
+	Label   string
 	state   llb.State
 	exports []client.ExportEntry
 }
 
 type BuildRequest struct {
+	Label     string
 	buildFunc func(context.Context, gateway.Client) (*gateway.Result, error)
 }
 

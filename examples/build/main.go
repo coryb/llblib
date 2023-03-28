@@ -10,12 +10,11 @@ import (
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
-	setup := []string{
-		"apk add -U go",
-	}
+	setup := []string{}
 
 	source := []string{"go.mod", "go.sum", "**/*.go"}
 	steps := []string{
@@ -32,6 +31,7 @@ func main() {
 		"GOPATH":      "/go", // for go mod cache
 		"GOOS":        runtime.GOOS,
 		"GOARCH":      runtime.GOARCH,
+		"PATH":        "/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 	}
 	cacheID := "me"
 	cachePaths := []string{
@@ -50,7 +50,10 @@ func main() {
 
 	slv := llblib.NewSolver(llblib.WithCwd(localCwd))
 
-	root := llb.Image("alpine:latest@sha256:e2e16842c9b54d985bf1ef9242a313f36b856181f188de21313820e177002501", llb.Platform(platform)).Dir("/")
+	root := llb.Image(
+		"golang:1.20",
+		llb.Platform(platform),
+	).Dir("/")
 
 	mounts := llblib.RunOptions{
 		llb.AddMount("/scratch", llb.Scratch()),
@@ -83,19 +86,31 @@ func main() {
 		)
 	}
 
-	req := slv.Download(llb.Diff(workspace, p.GetMount(localCwd)), ".")
+	dlReq := slv.Download(llb.Diff(workspace, p.GetMount(localCwd)), ".")
+	dlReq.Label = "download"
+	buildReq := slv.Build(llb.Diff(workspace, p.GetMount(localCwd)))
+	buildReq.Label = "my-build"
 
 	prog := progress.NewProgress()
 	defer prog.Release()
 
 	sess, err := slv.NewSession(ctx, cli)
 	if err != nil {
-		log.Fatalf("failed to create session: %+v", err)
+		log.Panicf("failed to create session: %+v", err)
 	}
 	defer sess.Release()
 
-	_, err = sess.Solve(ctx, req, prog)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		_, err := sess.Solve(ctx, dlReq, prog)
+		return err
+	})
+	eg.Go(func() error {
+		_, err := sess.Solve(ctx, buildReq, prog)
+		return err
+	})
+	err = eg.Wait()
 	if err != nil {
-		log.Fatalf("solve failed: %+v", err)
+		log.Panicf("solve failed: %+v", err)
 	}
 }
