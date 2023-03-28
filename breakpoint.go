@@ -241,8 +241,8 @@ func (s *solver) Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts 
 				return nil, errors.Wrap(err, "failed to start breakpoint process")
 			}
 
-			Progress(ctx).Pause()
-			defer Progress(ctx).Resume()
+			LoadProgress(ctx).Pause()
+			defer LoadProgress(ctx).Resume()
 
 			for _, f := range containerOpts.Setup {
 				if err := f(ctx); err != nil {

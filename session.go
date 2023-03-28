@@ -52,6 +52,8 @@ func (s *session) Solve(ctx context.Context, req SolveRequest, p progress.Progre
 	}
 
 	ctx = WithProgress(ctx, p)
+	ctx = WithSession(ctx, s)
+
 	res, err := s.client.Solve(ctx, def, solveOpt, p.Channel())
 	if err != nil {
 		return nil, errors.Wrap(err, "solve failed")
@@ -68,6 +70,7 @@ func (s *session) Build(ctx context.Context, req BuildRequest, p progress.Progre
 	}
 
 	ctx = WithProgress(ctx, p)
+	ctx = WithSession(ctx, s)
 	res, err := s.client.Build(ctx, solveOpt, "llblib", req.buildFunc, p.Channel())
 	if err != nil {
 		return nil, errors.Wrap(err, "build failed")
