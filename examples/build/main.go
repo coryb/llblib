@@ -78,7 +78,7 @@ func main() {
 
 	p := llblib.Persistent(root, mounts, llb.AddMount(localCwd, workspace))
 	for _, step := range steps {
-		p = p.Run(
+		p.Run(
 			llb.Shlex(step),
 			llb.Dir(localCwd),
 			llblib.AddEnvs(env),

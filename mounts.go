@@ -8,8 +8,8 @@ import (
 )
 
 type MountPropagator interface {
-	Run(...llb.RunOption) MountPropagator
-	// Add will append a RunOption to the list of propagated mounts.
+	Run(...llb.RunOption)
+	// Add will append a RunOption to the list of propagated options.
 	Add(...llb.RunOption)
 	ApplyRoot(...llb.StateOption)
 	ApplyMount(target string, opts ...llb.StateOption)
@@ -19,7 +19,7 @@ type MountPropagator interface {
 }
 
 func Persistent(root llb.State, opts ...llb.RunOption) MountPropagator {
-	pm := persistentMounts{
+	pm := &persistentMounts{
 		opts:   opts,
 		root:   root,
 		states: map[string]llb.State{},
@@ -35,7 +35,7 @@ type persistentMounts struct {
 
 var _ MountPropagator = (*persistentMounts)(nil)
 
-func (pm persistentMounts) Run(opts ...llb.RunOption) MountPropagator {
+func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 	runOpts := make([]llb.RunOption, len(opts))
 	copy(runOpts, opts)
 
@@ -57,15 +57,14 @@ func (pm persistentMounts) Run(opts ...llb.RunOption) MountPropagator {
 	for _, target := range targets {
 		pm.states[target] = execState.GetMount(target)
 	}
-	return pm
 }
 
-func (pm persistentMounts) Add(opts ...llb.RunOption) {
+func (pm *persistentMounts) Add(opts ...llb.RunOption) {
 	pm.opts = append(pm.opts, opts...)
 }
 
 func (pm persistentMounts) Copy() MountPropagator {
-	newPM := persistentMounts{
+	newPM := &persistentMounts{
 		root:   pm.root,
 		opts:   make([]llb.RunOption, len(pm.opts)),
 		states: map[string]llb.State{},
@@ -75,13 +74,13 @@ func (pm persistentMounts) Copy() MountPropagator {
 	return newPM
 }
 
-func (pm persistentMounts) ApplyRoot(opts ...llb.StateOption) {
+func (pm *persistentMounts) ApplyRoot(opts ...llb.StateOption) {
 	for _, opt := range opts {
 		pm.root = opt(pm.root)
 	}
 }
 
-func (pm persistentMounts) ApplyMount(target string, opts ...llb.StateOption) {
+func (pm *persistentMounts) ApplyMount(target string, opts ...llb.StateOption) {
 	mount, ok := pm.states[target]
 	if !ok {
 		mount = llb.Scratch()
