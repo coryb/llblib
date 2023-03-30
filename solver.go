@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/coryb/llblib/sockproxy"
 	"github.com/moby/buildkit/client"
@@ -78,6 +79,7 @@ type BuildRequest struct {
 type solver struct {
 	cwd          string
 	err          error
+	mu           sync.Mutex
 	localDirs    map[string]string
 	secrets      map[string]secretsprovider.Source
 	attachables  []bksess.Attachable
@@ -127,7 +129,9 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 		llb.LocalUniqueID(id),
 	)
 
+	s.mu.Lock()
 	s.localDirs[name] = localDir
+	s.mu.Unlock()
 
 	// Copy the local to scratch for better caching via buildkit
 	return llb.Scratch().File(
@@ -177,16 +181,20 @@ func firstUpInterface() string {
 
 func (s *solver) AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.RunOption {
 	id := digest.FromString(src).String()
+	s.mu.Lock()
 	s.secrets[id] = secretsprovider.Source{
 		ID:       id,
 		FilePath: src,
 	}
+	s.mu.Unlock()
 	opts = append(opts, llb.SecretID(id))
 	return llb.AddSecret(dest, opts...)
 }
 
 func (s *solver) Download(st llb.State, localDir string) SolveRequest {
+	s.mu.Lock()
 	s.attachables = append(s.attachables, filesync.NewFSSyncTargetDir(localDir))
+	s.mu.Unlock()
 	return SolveRequest{
 		state: st,
 		exports: []client.ExportEntry{{
@@ -206,6 +214,9 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 	if s.err != nil {
 		return nil, errors.Wrap(s.err, "solver in error state, cannot proceed")
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	releasers := []func() error{}
 	for _, helper := range s.helpers {
@@ -264,11 +275,12 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 		return bkSess.Run(ctx, cln.Dialer())
 	})
 
+	localDirs := maps.Clone(s.localDirs)
 	return &session{
 		session:     bkSess,
 		attachables: attachables,
 		releasers:   releasers,
 		client:      cln,
-		localDirs:   s.localDirs,
+		localDirs:   localDirs,
 	}, nil
 }

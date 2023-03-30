@@ -79,11 +79,13 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 			}
 
 			localPath = filepath.Join(dir, "proxy.sock")
+			s.mu.Lock()
 			s.agentConfigs[id] = sockproxy.AgentConfig{
 				ID:    id,
 				SSH:   false,
 				Paths: []string{localPath},
 			}
+			s.mu.Unlock()
 
 			dialerFunc := func() (net.Conn, error) {
 				var dialer net.Dialer
@@ -103,7 +105,9 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 			var g errgroup.Group
 
 			release = func() error {
+				s.mu.Lock()
 				delete(s.agentConfigs, id)
+				s.mu.Unlock()
 				defer os.RemoveAll(dir)
 
 				err := l.Close()
@@ -123,7 +127,9 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 			})
 			return release, nil
 		}
+		s.mu.Lock()
 		s.helpers = append(s.helpers, helper)
+		s.mu.Unlock()
 	} else {
 		s.err = errors.Errorf("unsupported forward scheme %q in %q", srcURL.Scheme, src)
 		return noop
