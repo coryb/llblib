@@ -31,19 +31,30 @@ func FrontendOpt(name, value string) FrontendOption {
 	})
 }
 
+func WithCustomName(name string) FrontendOption {
+	return frontendOptionFunc(func(fo *frontendOptions) {
+		fo.ConstraintsOpts = append(fo.ConstraintsOpts, llb.WithCustomName(name))
+	})
+}
+
 type frontendOptions struct {
-	Inputs map[string]llb.State
-	Opts   map[string]string
+	Inputs          map[string]llb.State
+	Opts            map[string]string
+	ConstraintsOpts []llb.ConstraintsOpt
 }
 
 type constraintsToOptions struct {
 	NullOption
 	source *llb.Constraints
+	opts   []llb.ConstraintsOpt
 }
 
 func (o constraintsToOptions) SetConstraintsOption(c *llb.Constraints) {
 	if o.source != nil {
 		*c = *o.source
+	}
+	for _, opt := range o.opts {
+		opt.SetConstraintsOption(c)
 	}
 }
 
@@ -64,6 +75,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 
 		var constrainOpt llb.ConstraintsOpt = constraintsToOptions{
 			source: constraints,
+			opts:   fo.ConstraintsOpts,
 		}
 
 		var result llb.State
