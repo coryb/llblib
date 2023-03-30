@@ -4,10 +4,14 @@ import (
 	"fmt"
 
 	"github.com/moby/buildkit/client/llb"
+	"golang.org/x/exp/maps"
 )
 
 type MountPropagator interface {
 	Run(...llb.RunOption) MountPropagator
+	// Add will append a RunOption to the list of propagated mounts.  A new
+	// MountPropagator will be returned, the original will not be modified.
+	Add(...llb.RunOption) MountPropagator
 	Root() llb.State
 	GetMount(target string) llb.State
 }
@@ -52,6 +56,18 @@ func (pm persistentMounts) Run(opts ...llb.RunOption) MountPropagator {
 		pm.states[target] = execState.GetMount(target)
 	}
 	return pm
+}
+
+func (pm persistentMounts) Add(opts ...llb.RunOption) MountPropagator {
+	newPM := persistentMounts{
+		root:   pm.root,
+		opts:   make([]llb.RunOption, len(pm.opts)),
+		states: map[string]llb.State{},
+	}
+	copy(newPM.opts, pm.opts)
+	newPM.opts = append(pm.opts, opts...)
+	maps.Copy(newPM.states, pm.states)
+	return newPM
 }
 
 type mountPropagatorRunOption struct {
