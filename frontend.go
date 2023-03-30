@@ -36,18 +36,16 @@ type frontendOptions struct {
 	Opts   map[string]string
 }
 
-type constraintsOptFunc func(*llb.Constraints)
-
-func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
-	f(c)
+type constraintsToOptions struct {
+	NullOption
+	source *llb.Constraints
 }
 
-func (f constraintsOptFunc) SetRunOption(*llb.ExecInfo)            {}
-func (f constraintsOptFunc) SetLocalOption(*llb.LocalInfo)         {}
-func (f constraintsOptFunc) SetHTTPOption(*llb.HTTPInfo)           {}
-func (f constraintsOptFunc) SetImageOption(*llb.ImageInfo)         {}
-func (f constraintsOptFunc) SetGitOption(*llb.GitInfo)             {}
-func (f constraintsOptFunc) SetOCILayoutOption(*llb.OCILayoutInfo) {}
+func (o constraintsToOptions) SetConstraintsOption(c *llb.Constraints) {
+	if o.source != nil {
+		*c = *o.source
+	}
+}
 
 func Frontend(source string, opts ...FrontendOption) llb.State {
 	return llb.Scratch().Async(func(ctx context.Context, st llb.State, constraints *llb.Constraints) (llb.State, error) {
@@ -64,12 +62,9 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 		sess := LoadSession(ctx)
 		p := LoadProgress(ctx)
 
-		if constraints == nil {
-			constraints = &llb.Constraints{}
+		var constrainOpt llb.ConstraintsOpt = constraintsToOptions{
+			source: constraints,
 		}
-		var constrainOpt llb.ConstraintsOpt = constraintsOptFunc(func(c *llb.Constraints) {
-			*c = *constraints
-		})
 
 		var result llb.State
 		req := BuildRequest{

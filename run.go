@@ -16,3 +16,13 @@ func (ro RunOptions) SetRunOption(ei *llb.ExecInfo) {
 func IgnoreCache() llb.RunOption {
 	return llb.AddEnv("LLBLIB_IGNORE_CACHE", identity.NewID())
 }
+
+type NullOption struct{}
+
+func (NullOption) SetConstraintsOption(c *llb.Constraints) {}
+func (NullOption) SetRunOption(*llb.ExecInfo)              {}
+func (NullOption) SetLocalOption(*llb.LocalInfo)           {}
+func (NullOption) SetHTTPOption(*llb.HTTPInfo)             {}
+func (NullOption) SetImageOption(*llb.ImageInfo)           {}
+func (NullOption) SetGitOption(*llb.GitInfo)               {}
+func (NullOption) SetOCILayoutOption(*llb.OCILayoutInfo)   {}
