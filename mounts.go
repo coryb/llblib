@@ -12,6 +12,8 @@ type MountPropagator interface {
 	// Add will append a RunOption to the list of propagated mounts.  A new
 	// MountPropagator will be returned, the original will not be modified.
 	Add(...llb.RunOption) MountPropagator
+	ApplyRoot(...llb.StateOption)
+	ApplyMount(target string, opts ...llb.StateOption)
 	Root() llb.State
 	GetMount(target string) llb.State
 }
@@ -68,6 +70,23 @@ func (pm persistentMounts) Add(opts ...llb.RunOption) MountPropagator {
 	newPM.opts = append(pm.opts, opts...)
 	maps.Copy(newPM.states, pm.states)
 	return newPM
+}
+
+func (pm persistentMounts) ApplyRoot(opts ...llb.StateOption) {
+	for _, opt := range opts {
+		pm.root = opt(pm.root)
+	}
+}
+
+func (pm persistentMounts) ApplyMount(target string, opts ...llb.StateOption) {
+	mount, ok := pm.states[target]
+	if !ok {
+		mount = llb.Scratch()
+	}
+	for _, opt := range opts {
+		mount = opt(mount)
+	}
+	pm.states[target] = mount
 }
 
 type mountPropagatorRunOption struct {
