@@ -9,13 +9,13 @@ import (
 
 type MountPropagator interface {
 	Run(...llb.RunOption) MountPropagator
-	// Add will append a RunOption to the list of propagated mounts.  A new
-	// MountPropagator will be returned, the original will not be modified.
-	Add(...llb.RunOption) MountPropagator
+	// Add will append a RunOption to the list of propagated mounts.
+	Add(...llb.RunOption)
 	ApplyRoot(...llb.StateOption)
 	ApplyMount(target string, opts ...llb.StateOption)
 	Root() llb.State
 	GetMount(target string) llb.State
+	Copy() MountPropagator
 }
 
 func Persistent(root llb.State, opts ...llb.RunOption) MountPropagator {
@@ -60,14 +60,17 @@ func (pm persistentMounts) Run(opts ...llb.RunOption) MountPropagator {
 	return pm
 }
 
-func (pm persistentMounts) Add(opts ...llb.RunOption) MountPropagator {
+func (pm persistentMounts) Add(opts ...llb.RunOption) {
+	pm.opts = append(pm.opts, opts...)
+}
+
+func (pm persistentMounts) Copy() MountPropagator {
 	newPM := persistentMounts{
 		root:   pm.root,
 		opts:   make([]llb.RunOption, len(pm.opts)),
 		states: map[string]llb.State{},
 	}
 	copy(newPM.opts, pm.opts)
-	newPM.opts = append(pm.opts, opts...)
 	maps.Copy(newPM.states, pm.states)
 	return newPM
 }
