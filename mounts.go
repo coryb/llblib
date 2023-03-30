@@ -147,3 +147,9 @@ func (pm persistentMounts) GetMount(target string) llb.State {
 	}
 	return st
 }
+
+func File(a *llb.FileAction, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(st llb.State) llb.State {
+		return st.File(a, opts...)
+	}
+}
