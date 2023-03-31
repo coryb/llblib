@@ -76,9 +76,10 @@ func (r *SolveRequest) Digest() (digest.Digest, error) {
 	if r.digest != "" {
 		return r.digest, nil
 	}
-	ctx := context.Background()
-	c := &llb.Constraints{}
-	dgst, _, _, _, err := r.state.Output().Vertex(ctx, c).Marshal(ctx, c)
+	dgst, err := Digest(r.state)
+	if err != nil {
+		return "", err
+	}
 	r.digest = dgst
 	return dgst, err
 }
