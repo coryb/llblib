@@ -18,6 +18,7 @@ type Progress interface {
 	Pause()
 	Resume()
 	Channel(opts ...ChannelOption) chan *client.SolveStatus
+	Label(string) Progress
 }
 
 type ProgressOption interface {
@@ -131,9 +132,16 @@ func (f channelOptionFunc) SetChannelOption(co *channelOption) {
 	f(co)
 }
 
-func Label(name string) ChannelOption {
+func AddLabel(l string) ChannelOption {
 	return channelOptionFunc(func(co *channelOption) {
-		co.label = name
+		if l == "" {
+			return
+		}
+		if co.label == "" {
+			co.label = l
+			return
+		}
+		co.label += " " + l
 	})
 }
 
@@ -187,6 +195,26 @@ func (p *progress) Channel(opts ...ChannelOption) chan *client.SolveStatus {
 		p.childCond.Signal()
 	}()
 	return ch
+}
+
+func (p *progress) Label(l string) Progress {
+	if l == "" {
+		return p
+	}
+	return labeledProgress{
+		Progress: p,
+		label:    l,
+	}
+}
+
+type labeledProgress struct {
+	Progress
+	label string
+}
+
+func (p labeledProgress) Channel(opts ...ChannelOption) chan *client.SolveStatus {
+	opts = append([]ChannelOption{AddLabel(p.label)}, opts...)
+	return p.Progress.Channel(opts...)
 }
 
 func addLabel(label, name string) string {

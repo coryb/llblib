@@ -32,6 +32,9 @@ func (p nullProgress) Release() {}
 func (p nullProgress) Sync()    {}
 func (p nullProgress) Pause()   {}
 func (p nullProgress) Resume()  {}
+func (p nullProgress) Label(string) progress.Progress {
+	return p
+}
 
 func (p nullProgress) Channel(opts ...progress.ChannelOption) chan *client.SolveStatus {
 	ch := make(chan *client.SolveStatus)
