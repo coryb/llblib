@@ -69,6 +69,7 @@ type Request struct {
 	Label     string
 	state     llb.State
 	exports   []client.ExportEntry
+	download  bksess.Attachable
 	buildFunc func(context.Context, gateway.Client) (*gateway.Result, error)
 }
 
@@ -78,7 +79,7 @@ type solver struct {
 	mu           sync.Mutex
 	localDirs    map[string]string
 	secrets      map[string]secretsprovider.Source
-	attachables  []bksess.Attachable
+	downloads    []bksess.Attachable
 	helpers      []func(ctx context.Context) (release func() error, err error)
 	agentConfigs map[string]sockproxy.AgentConfig
 }
@@ -204,8 +205,9 @@ func WithLabel(l string) RequestOption {
 }
 
 func (s *solver) Download(st llb.State, localDir string, opts ...RequestOption) Request {
+	download := filesync.NewFSSyncTargetDir(localDir)
 	s.mu.Lock()
-	s.attachables = append(s.attachables, filesync.NewFSSyncTargetDir(localDir))
+	s.downloads = append(s.downloads, download)
 	s.mu.Unlock()
 	r := Request{
 		state: st,
@@ -213,6 +215,7 @@ func (s *solver) Download(st llb.State, localDir string, opts ...RequestOption) 
 			Type:      client.ExporterLocal,
 			OutputDir: localDir,
 		}},
+		download: download,
 	}
 	for _, opt := range opts {
 		opt.SetRequestOption(&r)
@@ -246,9 +249,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 		}
 		releasers = append(releasers, release)
 	}
-
-	attachables := make([]bksess.Attachable, len(s.attachables))
-	copy(attachables, s.attachables)
+	attachables := []bksess.Attachable{}
 
 	dirSource := filesync.StaticDirSource{}
 	for name, localDir := range s.localDirs {
@@ -281,23 +282,39 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 		attachables = append(attachables, sp)
 	}
 
-	bkSess, err := bksess.NewSession(ctx, "llblib", "")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create buildkit session")
-	}
-	for _, a := range attachables {
-		bkSess.Allow(a)
+	// for each download we need a uniq session.  This is a hack, there has been
+	// some discussion for buildkit to have a session manager available to the
+	// client to manage this eventually.
+	allSessions := map[bksess.Attachable]*bksess.Session{}
+	for _, attach := range append([]bksess.Attachable{nil}, s.downloads...) {
+		bkSess, err := bksess.NewSession(ctx, "llblib", "")
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create buildkit session")
+		}
+		for _, a := range attachables {
+			bkSess.Allow(a)
+		}
+		if attach != nil {
+			bkSess.Allow(attach)
+		}
+		allSessions[attach] = bkSess
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 	releasers = append(releasers, eg.Wait)
-	eg.Go(func() error {
-		return bkSess.Run(ctx, cln.Dialer())
-	})
+	for _, bkSess := range allSessions {
+		bkSess := bkSess
+		eg.Go(func() error {
+			return bkSess.Run(ctx, cln.Dialer())
+		})
+	}
+
+	// TODO wrap cln.Dialer to close a channel so we can synchronize
+	// the sessions are running before continuing.
 
 	localDirs := maps.Clone(s.localDirs)
 	return &session{
-		session:     bkSess,
+		allSessions: allSessions,
 		attachables: attachables,
 		releasers:   releasers,
 		client:      cln,

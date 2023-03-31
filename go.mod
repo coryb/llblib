@@ -3,8 +3,8 @@ module github.com/coryb/llblib
 go 1.20
 
 require (
+	github.com/containerd/console v1.0.3
 	github.com/docker/docker v23.0.0-rc.1+incompatible
-	github.com/kr/pretty v0.2.0
 	github.com/moby/buildkit v0.11.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20220303224323-02efb9a75ee1
@@ -19,7 +19,6 @@ require (
 
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
-	github.com/containerd/console v1.0.3 // indirect
 	github.com/containerd/containerd v1.6.18 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
