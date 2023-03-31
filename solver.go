@@ -69,6 +69,18 @@ type SolveRequest struct {
 	Label   string
 	state   llb.State
 	exports []client.ExportEntry
+	digest  digest.Digest
+}
+
+func (r *SolveRequest) Digest() (digest.Digest, error) {
+	if r.digest != "" {
+		return r.digest, nil
+	}
+	ctx := context.Background()
+	c := &llb.Constraints{}
+	dgst, _, _, _, err := r.state.Output().Vertex(ctx, c).Marshal(ctx, c)
+	r.digest = dgst
+	return dgst, err
 }
 
 type BuildRequest struct {
