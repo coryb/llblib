@@ -70,6 +70,13 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 			return noop
 		}
 		id = digest.FromString(localPath).String()
+		s.mu.Lock()
+		s.agentConfigs[id] = sockproxy.AgentConfig{
+			ID:    id,
+			SSH:   false,
+			Paths: []string{localPath},
+		}
+		s.mu.Unlock()
 	} else if srcURL.Scheme == "tcp" {
 		id = digest.FromString(src).String()
 		helper := func(ctx context.Context) (release func() error, err error) {
