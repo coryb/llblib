@@ -36,9 +36,7 @@ type persistentMounts struct {
 var _ MountPropagator = (*persistentMounts)(nil)
 
 func (pm *persistentMounts) Run(opts ...llb.RunOption) {
-	runOpts := make([]llb.RunOption, len(opts))
-	copy(runOpts, opts)
-
+	runOpts := []llb.RunOption{}
 	targets := []string{}
 	for _, o := range pm.opts {
 		ei := llb.ExecInfo{}
@@ -51,6 +49,8 @@ func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 		}
 		runOpts = append(runOpts, mountPropagatorRunOption{&ei})
 	}
+
+	runOpts = append(runOpts, opts...)
 
 	execState := pm.root.Run(runOpts...)
 	pm.root = execState.Root()
