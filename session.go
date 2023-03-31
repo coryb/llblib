@@ -8,6 +8,7 @@ import (
 	"github.com/moby/buildkit/client"
 	bksess "github.com/moby/buildkit/session"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 )
 
 type Session interface {
@@ -16,7 +17,7 @@ type Session interface {
 }
 
 type session struct {
-	session     *bksess.Session
+	allSessions map[bksess.Attachable]*bksess.Session
 	localDirs   map[string]string
 	attachables []bksess.Attachable
 	releasers   []func() error
@@ -26,7 +27,9 @@ type session struct {
 var _ Session = (*session)(nil)
 
 func (s *session) Release() error {
-	s.session.Close()
+	for _, sess := range s.allSessions {
+		sess.Close()
+	}
 	// FIXME group errors
 	for _, r := range s.releasers {
 		if err := r(); err != nil {
@@ -37,11 +40,18 @@ func (s *session) Release() error {
 }
 
 func (s *session) Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error) {
+	sess := s.allSessions[req.download]
+
+	attachables := slices.Clone(s.attachables)
+	if req.download != nil {
+		attachables = append(attachables, req.download)
+	}
+
 	solveOpt := client.SolveOpt{
-		SharedSession:         s.session,
+		SharedSession:         sess,
 		SessionPreInitialized: true,
 		LocalDirs:             s.localDirs,
-		Session:               s.attachables,
+		Session:               attachables,
 	}
 
 	ctx = WithProgress(ctx, p)
