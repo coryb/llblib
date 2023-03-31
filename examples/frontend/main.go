@@ -43,7 +43,7 @@ func main() {
 	}
 	defer sess.Release()
 
-	_, err = sess.Build(ctx, req, prog)
+	_, err = sess.Do(ctx, req, prog)
 	if err != nil {
 		log.Fatalf("build failed: %+v", err)
 	}

@@ -64,10 +64,6 @@ func (nullSession) Release() error {
 	return nil
 }
 
-func (nullSession) Solve(ctx context.Context, req SolveRequest, p progress.Progress) (*client.SolveResponse, error) {
-	return nil, nil
-}
-
-func (nullSession) Build(ctx context.Context, req BuildRequest, p progress.Progress) (*client.SolveResponse, error) {
+func (nullSession) Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error) {
 	return nil, nil
 }
