@@ -28,9 +28,9 @@ type Solver interface {
 	Forward(src, dest string, opts ...ForwardOption) llb.RunOption
 	AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.RunOption
 
-	Download(st llb.State, localDir string) SolveRequest
-	Build(st llb.State) SolveRequest
-	Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts ...BreakpointOption) BuildRequest
+	Download(st llb.State, localDir string, opts ...RequestOption) Request
+	Build(st llb.State, opts ...RequestOption) Request
+	Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts ...BreakpointOption) Request
 
 	NewSession(ctx context.Context, cln *client.Client) (Session, error)
 }
@@ -65,27 +65,10 @@ func NewSolver(opts ...SolverOption) Solver {
 	return &s
 }
 
-type SolveRequest struct {
-	Label   string
-	state   llb.State
-	exports []client.ExportEntry
-	digest  digest.Digest
-}
-
-func (r *SolveRequest) Digest() (digest.Digest, error) {
-	if r.digest != "" {
-		return r.digest, nil
-	}
-	dgst, err := Digest(r.state)
-	if err != nil {
-		return "", err
-	}
-	r.digest = dgst
-	return dgst, err
-}
-
-type BuildRequest struct {
+type Request struct {
 	Label     string
+	state     llb.State
+	exports   []client.ExportEntry
 	buildFunc func(context.Context, gateway.Client) (*gateway.Result, error)
 }
 
@@ -204,23 +187,47 @@ func (s *solver) AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.R
 	return llb.AddSecret(dest, opts...)
 }
 
-func (s *solver) Download(st llb.State, localDir string) SolveRequest {
+type RequestOption interface {
+	SetRequestOption(*Request)
+}
+
+type requestOptionFunc func(*Request)
+
+func (f requestOptionFunc) SetRequestOption(r *Request) {
+	f(r)
+}
+
+func WithLabel(l string) RequestOption {
+	return requestOptionFunc(func(r *Request) {
+		r.Label = l
+	})
+}
+
+func (s *solver) Download(st llb.State, localDir string, opts ...RequestOption) Request {
 	s.mu.Lock()
 	s.attachables = append(s.attachables, filesync.NewFSSyncTargetDir(localDir))
 	s.mu.Unlock()
-	return SolveRequest{
+	r := Request{
 		state: st,
 		exports: []client.ExportEntry{{
 			Type:      client.ExporterLocal,
 			OutputDir: localDir,
 		}},
 	}
+	for _, opt := range opts {
+		opt.SetRequestOption(&r)
+	}
+	return r
 }
 
-func (s *solver) Build(st llb.State) SolveRequest {
-	return SolveRequest{
+func (s *solver) Build(st llb.State, opts ...RequestOption) Request {
+	r := Request{
 		state: st,
 	}
+	for _, opt := range opts {
+		opt.SetRequestOption(&r)
+	}
+	return r
 }
 
 func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, error) {

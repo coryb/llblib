@@ -109,8 +109,8 @@ func WithOutput(out, err io.WriteCloser) BreakpointOption {
 	})
 }
 
-func (s *solver) Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts ...BreakpointOption) BuildRequest {
-	return func(opts ...BreakpointOption) BuildRequest {
+func (s *solver) Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts ...BreakpointOption) Request {
+	return func(opts ...BreakpointOption) Request {
 		build := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			ei := llb.ExecInfo{
 				State: root,
@@ -302,7 +302,7 @@ func (s *solver) Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts 
 
 			return gateway.NewResult(), nil
 		}
-		return BuildRequest{
+		return Request{
 			buildFunc: build,
 		}
 	}

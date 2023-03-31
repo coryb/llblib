@@ -79,7 +79,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 		}
 
 		var result llb.State
-		req := BuildRequest{
+		req := Request{
 			buildFunc: func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 				inputs := map[string]*pb.Definition{}
 				for name, input := range fo.Inputs {
@@ -111,7 +111,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 				return nil, nil
 			},
 		}
-		_, err := sess.Build(ctx, req, p)
+		_, err := sess.Do(ctx, req, p)
 
 		return result, err
 	})

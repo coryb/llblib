@@ -86,10 +86,19 @@ func main() {
 		)
 	}
 
-	dlReq := slv.Download(llb.Diff(workspace, p.GetMount(localCwd)), ".")
-	dlReq.Label = "download"
-	buildReq := slv.Build(llb.Diff(workspace, p.GetMount(localCwd)))
-	buildReq.Label = "my-build"
+	reqs := []llblib.Request{}
+	reqs = append(reqs,
+		slv.Download(
+			llb.Diff(workspace, p.GetMount(localCwd)), ".",
+			llblib.WithLabel("download"),
+		),
+	)
+	reqs = append(reqs,
+		slv.Build(
+			llb.Diff(workspace, p.GetMount(localCwd)),
+			llblib.WithLabel("my-build"),
+		),
+	)
 
 	prog := progress.NewProgress()
 	defer prog.Release()
@@ -101,14 +110,13 @@ func main() {
 	defer sess.Release()
 
 	var eg errgroup.Group
-	eg.Go(func() error {
-		_, err := sess.Solve(ctx, dlReq, prog)
-		return err
-	})
-	eg.Go(func() error {
-		_, err := sess.Solve(ctx, buildReq, prog)
-		return err
-	})
+	for _, r := range reqs {
+		r := r
+		eg.Go(func() error {
+			_, err := sess.Do(ctx, r, prog)
+			return err
+		})
+	}
 	err = eg.Wait()
 	if err != nil {
 		log.Panicf("solve failed: %+v", err)

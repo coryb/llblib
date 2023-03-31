@@ -12,8 +12,7 @@ import (
 
 type Session interface {
 	Release() error
-	Solve(ctx context.Context, req SolveRequest, p progress.Progress) (*client.SolveResponse, error)
-	Build(ctx context.Context, req BuildRequest, p progress.Progress) (*client.SolveResponse, error)
+	Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error)
 }
 
 type session struct {
@@ -37,43 +36,34 @@ func (s *session) Release() error {
 	return nil
 }
 
-func (s *session) Solve(ctx context.Context, req SolveRequest, p progress.Progress) (*client.SolveResponse, error) {
+func (s *session) Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error) {
+	solveOpt := client.SolveOpt{
+		SharedSession:         s.session,
+		SessionPreInitialized: true,
+		LocalDirs:             s.localDirs,
+		Session:               s.attachables,
+	}
+
+	ctx = WithProgress(ctx, p)
+	ctx = WithSession(ctx, s)
+
+	if req.buildFunc != nil {
+		res, err := s.client.Build(ctx, solveOpt, "llblib", req.buildFunc, p.Channel(progress.AddLabel(req.Label)))
+		if err != nil {
+			return nil, errors.Wrap(err, "build failed")
+		}
+		return res, nil
+	}
+
+	solveOpt.Exports = req.exports
 	def, err := req.state.Marshal(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal state")
 	}
 
-	solveOpt := client.SolveOpt{
-		SharedSession:         s.session,
-		SessionPreInitialized: true,
-		LocalDirs:             s.localDirs,
-		Session:               s.attachables,
-		Exports:               req.exports,
-	}
-
-	ctx = WithProgress(ctx, p)
-	ctx = WithSession(ctx, s)
-
 	res, err := s.client.Solve(ctx, def, solveOpt, p.Channel(progress.AddLabel(req.Label)))
 	if err != nil {
 		return nil, errors.Wrap(err, "solve failed")
-	}
-	return res, nil
-}
-
-func (s *session) Build(ctx context.Context, req BuildRequest, p progress.Progress) (*client.SolveResponse, error) {
-	solveOpt := client.SolveOpt{
-		SharedSession:         s.session,
-		SessionPreInitialized: true,
-		LocalDirs:             s.localDirs,
-		Session:               s.attachables,
-	}
-
-	ctx = WithProgress(ctx, p)
-	ctx = WithSession(ctx, s)
-	res, err := s.client.Build(ctx, solveOpt, "llblib", req.buildFunc, p.Channel(progress.AddLabel(req.Label)))
-	if err != nil {
-		return nil, errors.Wrap(err, "build failed")
 	}
 	return res, nil
 }
