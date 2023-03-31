@@ -37,17 +37,25 @@ type ContainerOptions struct {
 	Teardown []func() error
 }
 
-type FdReadCloser interface {
-	io.ReadCloser
+type FdReader interface {
+	io.Reader
 	Fd() uintptr
 }
 
-func WithTTY(in FdReadCloser, out, err io.WriteCloser) BreakpointOption {
+type noopWriteCloser struct {
+	io.Writer
+}
+
+func (noopWriteCloser) Close() error {
+	return nil
+}
+
+func WithTTY(in FdReader, out, err io.Writer) BreakpointOption {
 	return breakpointOptionFunc(func(co *ContainerOptions) {
 		co.Tty = true
-		co.Stdin = in
-		co.Stdout = out
-		co.Stderr = err
+		co.Stdin = io.NopCloser(in)
+		co.Stdout = noopWriteCloser{out}
+		co.Stderr = noopWriteCloser{err}
 		co.Setup = append(co.Setup, func(ctx context.Context) error {
 			oldState, err := terminal.MakeRaw(int(in.Fd()))
 			if err != nil {
