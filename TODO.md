@@ -1,5 +1,6 @@
 ### TODO:
 * ~~breakpoint/gateway-exec~~
+* ~~gateway-exec on error~~
 * ~~forward unix|tcp unix|tcp~~
 * ~~frontend (dockerfile) with input, opts~~
 * ~~ignoreCache~~
