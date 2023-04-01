@@ -28,7 +28,9 @@ func (s *solver) Resolver() llb.ImageMetaResolver {
 	if s.resolver != nil {
 		return s.resolver
 	}
-	s.resolver = &resolver{}
+	s.resolver = &resolver{
+		cache: map[cacheKey]*cacheValue{},
+	}
 	return s.resolver
 }
 
@@ -43,8 +45,10 @@ type cacheKey struct {
 }
 
 type cacheValue struct {
-	digest digest.Digest
-	config []byte
+	digest   digest.Digest
+	config   []byte
+	err      error
+	inflight chan struct{}
 }
 
 type resolver struct {
@@ -52,7 +56,7 @@ type resolver struct {
 	done      chan error
 	mu        sync.Mutex
 	cacheMu   sync.RWMutex
-	cache     map[cacheKey]cacheValue
+	cache     map[cacheKey]*cacheValue
 }
 
 func (r *resolver) start(ctx context.Context, cln *client.Client, p progress.Progress) error {
@@ -69,35 +73,7 @@ func (r *resolver) start(ctx context.Context, cln *client.Client, p progress.Pro
 			for req := range r.resolveCh {
 				req := req
 				go func() {
-					key := cacheKey{
-						resolveType: req.opt.ResolverType,
-						ref:         req.ref,
-						mode:        req.opt.ResolveMode,
-						store:       req.opt.Store,
-					}
-					if req.opt.Platform != nil {
-						key.os = req.opt.Platform.OS
-						key.arch = req.opt.Platform.Architecture
-						key.variant = req.opt.Platform.Variant
-					}
-					r.cacheMu.RLock()
-					val, ok := r.cache[key]
-					r.cacheMu.RUnlock()
-					if ok {
-						req.response <- resolveResponse{
-							digest: val.digest,
-							config: val.config,
-						}
-					}
 					digest, config, err := c.ResolveImageConfig(ctx, req.ref, req.opt)
-					if err != nil {
-						r.cacheMu.Lock()
-						r.cache[key] = cacheValue{
-							digest: digest,
-							config: config,
-						}
-						r.cacheMu.Unlock()
-					}
 					select {
 					case <-ctx.Done():
 						close(req.response)
@@ -126,6 +102,53 @@ func (r *resolver) stop() error {
 }
 
 func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
+	key := cacheKey{
+		resolveType: opt.ResolverType,
+		ref:         ref,
+		mode:        opt.ResolveMode,
+		store:       opt.Store,
+	}
+	if opt.Platform != nil {
+		key.os = opt.Platform.OS
+		key.arch = opt.Platform.Architecture
+		key.variant = opt.Platform.Variant
+	}
+	r.cacheMu.RLock()
+	val, ok := r.cache[key]
+	r.cacheMu.RUnlock()
+	if ok {
+		select {
+		case <-ctx.Done():
+			return "", nil, ctx.Err()
+		case <-val.inflight:
+			return val.digest, val.config, val.err
+		}
+	}
+
+	r.cacheMu.Lock()
+	// double check now that we have the write lock that someone
+	// didnt beat us to it
+	waiting := false
+	val, ok = r.cache[key]
+	if ok {
+		// someone beat us, we should wait
+		waiting = true
+	} else {
+		val = &cacheValue{
+			inflight: make(chan struct{}),
+		}
+		r.cache[key] = val
+	}
+	r.cacheMu.Unlock()
+	if waiting {
+		select {
+		case <-ctx.Done():
+			return "", nil, ctx.Err()
+		case <-val.inflight:
+			return val.digest, val.config, val.err
+		}
+	}
+
 	respCh := make(chan resolveResponse)
 	req := resolveRequest{
 		ref:      ref,
@@ -147,6 +170,10 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.R
 		if !ok {
 			return "", nil, errors.New("resolver did not respond")
 		}
+		val.digest = resp.digest
+		val.config = resp.config
+		val.err = resp.err
+		close(val.inflight)
 		return resp.digest, resp.config, resp.err
 	}
 }
