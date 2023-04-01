@@ -1,0 +1,28 @@
+linters:
+  enable-all: false
+  disable-all: true
+  enable:
+    - depguard
+    - exportloopref
+    - gocritic
+    - gofmt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    # FIXME add godocs to code
+    # - revive
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - exportloopref
+
+issues:
+  exclude-use-default: false
+  max-same-issues: 0
+  max-issues-per-linter: 0
+
+run:
+  skip-dirs-use-default: false
