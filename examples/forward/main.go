@@ -60,12 +60,12 @@ func main() {
 
 	sess, err := slv.NewSession(ctx, cli)
 	if err != nil {
-		log.Fatalf("failed to create session: %+v", err)
+		log.Panicf("failed to create session: %+v", err)
 	}
 	defer sess.Release()
 
-	_, err = sess.Solve(ctx, req, prog)
+	_, err = sess.Do(ctx, req, prog)
 	if err != nil {
-		log.Fatalf("solve failed: %+v", err)
+		log.Panicf("solve failed: %+v", err)
 	}
 }

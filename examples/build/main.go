@@ -87,16 +87,12 @@ func main() {
 	}
 
 	reqs := []llblib.Request{}
-	reqs = append(reqs,
-		slv.Download(
-			llb.Diff(workspace, p.GetMount(localCwd)), ".",
-			llblib.WithLabel("download"),
-		),
-	)
+
 	reqs = append(reqs,
 		slv.Build(
 			llb.Diff(workspace, p.GetMount(localCwd)),
 			llblib.WithLabel("my-build"),
+			llblib.Download("."),
 		),
 	)
 

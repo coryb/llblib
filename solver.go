@@ -28,9 +28,8 @@ type Solver interface {
 	Forward(src, dest string, opts ...ForwardOption) llb.RunOption
 	AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.RunOption
 
-	Download(st llb.State, localDir string, opts ...RequestOption) Request
 	Build(st llb.State, opts ...RequestOption) Request
-	Breakpoint(root llb.State, runOpts ...llb.RunOption) func(opts ...BreakpointOption) Request
+	Container(root llb.State, opts ...ContainerOption) Request
 
 	NewSession(ctx context.Context, cln *client.Client) (Session, error)
 }
@@ -70,7 +69,9 @@ type Request struct {
 	state     llb.State
 	exports   []client.ExportEntry
 	download  bksess.Attachable
+	evaluate  bool
 	buildFunc func(context.Context, gateway.Client) (*gateway.Result, error)
+	onError   func(context.Context, gateway.Client, error) error
 }
 
 type solver struct {
@@ -204,23 +205,14 @@ func WithLabel(l string) RequestOption {
 	})
 }
 
-func (s *solver) Download(st llb.State, localDir string, opts ...RequestOption) Request {
-	download := filesync.NewFSSyncTargetDir(localDir)
-	s.mu.Lock()
-	s.downloads = append(s.downloads, download)
-	s.mu.Unlock()
-	r := Request{
-		state: st,
-		exports: []client.ExportEntry{{
+func Download(localDir string) RequestOption {
+	return requestOptionFunc(func(r *Request) {
+		r.exports = []client.ExportEntry{{
 			Type:      client.ExporterLocal,
 			OutputDir: localDir,
-		}},
-		download: download,
-	}
-	for _, opt := range opts {
-		opt.SetRequestOption(&r)
-	}
-	return r
+		}}
+		r.download = filesync.NewFSSyncTargetDir(localDir)
+	})
 }
 
 func (s *solver) Build(st llb.State, opts ...RequestOption) Request {
@@ -229,6 +221,11 @@ func (s *solver) Build(st llb.State, opts ...RequestOption) Request {
 	}
 	for _, opt := range opts {
 		opt.SetRequestOption(&r)
+	}
+	if r.download != nil {
+		s.mu.Lock()
+		s.downloads = append(s.downloads, r.download)
+		s.mu.Unlock()
 	}
 	return r
 }
