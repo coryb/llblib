@@ -59,7 +59,8 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		localPath string
 	)
 
-	if srcURL.Scheme == "unix" {
+	switch srcURL.Scheme {
+	case "unix":
 		localPath = srcURL.Path
 		if !filepath.IsAbs(localPath) {
 			localPath = filepath.Join(s.cwd, srcURL.Path)
@@ -77,7 +78,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 			Paths: []string{localPath},
 		}
 		s.mu.Unlock()
-	} else if srcURL.Scheme == "tcp" {
+	case "tcp":
 		id = digest.FromString(src).String()
 		helper := func(ctx context.Context) (release func() error, err error) {
 			dir, err := ioutil.TempDir("", "forward")
@@ -137,7 +138,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		s.mu.Lock()
 		s.helpers = append(s.helpers, helper)
 		s.mu.Unlock()
-	} else {
+	default:
 		s.err = errors.Errorf("unsupported forward scheme %q in %q", srcURL.Scheme, src)
 		return noop
 	}

@@ -36,19 +36,22 @@ func main() {
 		slv.AddSecretFile("go.mod", "/secret/go.mod"),
 	}
 
-	req := slv.Breakpoint(root, llb.Shlex("/bin/sh"), mounts)(llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr))
+	req := slv.Container(root,
+		llblib.WithRun(llb.Shlex("/bin/sh"), mounts),
+		llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr),
+	)
 
 	prog := progress.NewProgress(progress.WithConsole(console.Current()))
 	defer prog.Release()
 
 	sess, err := slv.NewSession(ctx, cli)
 	if err != nil {
-		log.Fatalf("failed to create session: %+v", err)
+		log.Panicf("failed to create session: %+v", err)
 	}
 	defer sess.Release()
 
 	_, err = sess.Do(ctx, req, prog)
 	if err != nil {
-		log.Fatalf("build failed: %+v", err)
+		log.Panicf("build failed: %+v", err)
 	}
 }

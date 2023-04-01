@@ -107,6 +107,9 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 					result = llb.Scratch()
 				} else {
 					result, err = ref.ToState()
+					if err != nil {
+						return nil, errors.Wrap(err, "failed to convert ref to state")
+					}
 				}
 				return nil, nil
 			},
