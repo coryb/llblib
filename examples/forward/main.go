@@ -58,13 +58,13 @@ func main() {
 	prog := progress.NewProgress()
 	defer prog.Release()
 
-	sess, err := slv.NewSession(ctx, cli)
+	sess, err := slv.NewSession(ctx, cli, prog)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}
 	defer sess.Release()
 
-	_, err = sess.Do(ctx, req, prog)
+	_, err = sess.Do(ctx, req)
 	if err != nil {
 		log.Panicf("solve failed: %+v", err)
 	}

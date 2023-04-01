@@ -64,6 +64,6 @@ func (nullSession) Release() error {
 	return nil
 }
 
-func (nullSession) Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error) {
+func (nullSession) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
 	return nil, nil
 }

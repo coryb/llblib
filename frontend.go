@@ -71,7 +71,6 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 		}
 
 		sess := LoadSession(ctx)
-		p := LoadProgress(ctx)
 
 		var constrainOpt llb.ConstraintsOpt = constraintsToOptions{
 			source: constraints,
@@ -114,7 +113,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 				return nil, nil
 			},
 		}
-		_, err := sess.Do(ctx, req, p)
+		_, err := sess.Do(ctx, req)
 
 		return result, err
 	})

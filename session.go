@@ -15,7 +15,7 @@ import (
 
 type Session interface {
 	Release() error
-	Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error)
+	Do(ctx context.Context, req Request) (*client.SolveResponse, error)
 }
 
 type session struct {
@@ -24,6 +24,8 @@ type session struct {
 	attachables []bksess.Attachable
 	releasers   []func() error
 	client      *client.Client
+	resolver    *resolver
+	progress    progress.Progress
 }
 
 var _ Session = (*session)(nil)
@@ -41,7 +43,7 @@ func (s *session) Release() error {
 	return nil
 }
 
-func (s *session) Do(ctx context.Context, req Request, p progress.Progress) (*client.SolveResponse, error) {
+func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
 	sess := s.allSessions[req.download]
 
 	attachables := slices.Clone(s.attachables)
@@ -56,7 +58,7 @@ func (s *session) Do(ctx context.Context, req Request, p progress.Progress) (*cl
 		Session:               attachables,
 	}
 
-	ctx = WithProgress(ctx, p)
+	ctx = WithProgress(ctx, s.progress)
 	ctx = WithSession(ctx, s)
 
 	if req.buildFunc != nil {
@@ -67,7 +69,7 @@ func (s *session) Do(ctx context.Context, req Request, p progress.Progress) (*cl
 				return nil, goerrors.Join(err, moreErr)
 			}
 			return res, err
-		}, p.Channel(progress.AddLabel(req.Label)))
+		}, s.progress.Channel(progress.AddLabel(req.Label)))
 		if err != nil {
 			return nil, errors.Wrap(err, "build failed")
 		}
@@ -91,7 +93,7 @@ func (s *session) Do(ctx context.Context, req Request, p progress.Progress) (*cl
 			return nil, goerrors.Join(err, moreErr)
 		}
 		return res, nil
-	}, p.Channel(progress.AddLabel(req.Label)))
+	}, s.progress.Channel(progress.AddLabel(req.Label)))
 	if err != nil {
 		return nil, errors.Wrap(err, "solve failed")
 	}
