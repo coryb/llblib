@@ -31,7 +31,6 @@ func main() {
 		"GOPATH":      "/go", // for go mod cache
 		"GOOS":        runtime.GOOS,
 		"GOARCH":      runtime.GOARCH,
-		"PATH":        "/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 	}
 	cacheID := "me"
 	cachePaths := []string{
@@ -43,7 +42,7 @@ func main() {
 	// ----
 
 	ctx := context.Background()
-	cli, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cln, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
@@ -53,6 +52,8 @@ func main() {
 	root := llb.Image(
 		"golang:1.20",
 		llb.Platform(platform),
+		llb.WithMetaResolver(slv.Resolver()),
+		llb.ResolveDigest(true),
 	).Dir("/")
 
 	mounts := llblib.RunOptions{
@@ -60,7 +61,12 @@ func main() {
 		llb.AddMount("/local", slv.Local(".", llb.IncludePatterns([]string{"*"}), llb.ExcludePatterns([]string{"*"}))),
 		llb.AddMount("/git", llb.Git("https://github.com/moby/buildkit.git", "baaf67ba976460a51ef198abab88baae376c32d8", llb.KeepGitDir())),
 		llb.AddMount("/http", llb.HTTP("https://raw.githubusercontent.com/moby/buildkit/master/README.md", llb.Filename("README.md"), llb.Chmod(0o600))),
-		llb.AddMount("/image", llb.Image("busybox:latest@sha256:acaddd9ed544f7baf3373064064a51250b14cfe3ec604d65765a53da5958e5f5", llb.Platform(platform))),
+		llb.AddMount("/image", llb.Image(
+			"busybox:latest",
+			llb.Platform(platform),
+			llb.WithMetaResolver(slv.Resolver()),
+			llb.ResolveDigest(true),
+		)),
 	}
 
 	for _, cmd := range setup {
@@ -99,7 +105,7 @@ func main() {
 	prog := progress.NewProgress()
 	defer prog.Release()
 
-	sess, err := slv.NewSession(ctx, cli)
+	sess, err := slv.NewSession(ctx, cln, prog)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}
@@ -109,7 +115,7 @@ func main() {
 	for _, r := range reqs {
 		r := r
 		eg.Go(func() error {
-			_, err := sess.Do(ctx, r, prog)
+			_, err := sess.Do(ctx, r)
 			return err
 		})
 	}

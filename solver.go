@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/coryb/llblib/progress"
 	"github.com/coryb/llblib/sockproxy"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
@@ -31,7 +32,8 @@ type Solver interface {
 	Build(st llb.State, opts ...RequestOption) Request
 	Container(root llb.State, opts ...ContainerOption) Request
 
-	NewSession(ctx context.Context, cln *client.Client) (Session, error)
+	Resolver() llb.ImageMetaResolver
+	NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error)
 }
 
 type SolverOption interface {
@@ -83,6 +85,7 @@ type solver struct {
 	downloads    []bksess.Attachable
 	helpers      []func(ctx context.Context) (release func() error, err error)
 	agentConfigs map[string]sockproxy.AgentConfig
+	resolver     *resolver
 }
 
 var _ Solver = (*solver)(nil)
@@ -230,7 +233,7 @@ func (s *solver) Build(st llb.State, opts ...RequestOption) Request {
 	return r
 }
 
-func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, error) {
+func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error) {
 	if s.err != nil {
 		return nil, errors.Wrap(s.err, "solver in error state, cannot proceed")
 	}
@@ -297,6 +300,13 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 		allSessions[attach] = bkSess
 	}
 
+	if s.resolver != nil {
+		if err := s.resolver.start(ctx, cln, p); err != nil {
+			return nil, errors.Wrap(err, "failed to start resolver")
+		}
+		releasers = append(releasers, s.resolver.stop)
+	}
+
 	eg, ctx := errgroup.WithContext(ctx)
 	releasers = append(releasers, eg.Wait)
 	for _, bkSess := range allSessions {
@@ -316,5 +326,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client) (Session, e
 		releasers:   releasers,
 		client:      cln,
 		localDirs:   localDirs,
+		resolver:    s.resolver,
+		progress:    p,
 	}, nil
 }
