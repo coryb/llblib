@@ -326,7 +326,7 @@ func mergeExecOp(dest *pb.ExecOp, src *pb.ExecOp) {
 	if len(src.Meta.Args) > 0 && src.Meta.Args[0] != unsetArgsSentinel {
 		dest.Meta.Args = src.Meta.Args
 	}
-	if src.Meta.Cwd != "" {
+	if src.Meta.Cwd != "" && src.Meta.Cwd != "/" {
 		dest.Meta.Cwd = src.Meta.Cwd
 	}
 	if src.Meta.User != "" {
