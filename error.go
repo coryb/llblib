@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/gateway/client"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/errdefs"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
 )
 
@@ -48,6 +50,11 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 		opt.SetRunOption(&ei)
 	}
 
+	mountStates := map[string]llb.State{}
+	for _, m := range ei.Mounts {
+		mountStates[m.Target] = llb.NewState(m.Source)
+	}
+
 	op, err := opFromInfo(ctx, ei)
 	if err != nil {
 		return errors.Wrap(err, "failed to extract op from exec info")
@@ -56,12 +63,27 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 	mergeExecOp(se.Op.GetExec(), op.GetExec())
 
 	containerOpts := containerFromOp(se.Op)
-	for i := range containerOpts.Mounts {
+	for i, m := range containerOpts.Mounts {
 		if i >= len(se.MountIDs) {
-			break
+			if st, ok := mountStates[m.Dest]; ok && m.MountType == pb.MountType_BIND {
+				def, err := st.Marshal(ctx)
+				if err != nil {
+					return errors.Wrapf(err, "failed to mount state for %s", m.Dest)
+				}
+
+				r, err := c.Solve(ctx, client.SolveRequest{
+					Definition: def.ToPB(),
+				})
+				if err != nil {
+					return errors.Wrapf(err, "failed to solve mount state for %s", m.Dest)
+				}
+				containerOpts.Mounts[i].Ref = r.Ref
+			}
+			continue
 		}
 		containerOpts.Mounts[i].ResultID = se.MountIDs[i]
 	}
+
 	// // also add input as mounts so we might be able to to compare inputs
 	// // from outputs in case we need to detect or manually export changes.
 	// inputMounts := containerOpts.Mounts

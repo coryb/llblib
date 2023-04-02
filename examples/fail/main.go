@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"log"
 	"os"
 
@@ -9,6 +10,9 @@ import (
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
 )
+
+//go:embed differ.sh
+var differScript []byte
 
 func main() {
 	ctx := context.Background()
@@ -35,7 +39,19 @@ func main() {
 		llblib.Download("."),
 		llblib.OnError(
 			llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr),
-			llblib.WithRun(llb.Args([]string{"/bin/bash"})),
+			llblib.WithRun(
+				// swap out golang with busybox but preserve /scratch and /src
+				llb.AddMount("/",
+					llb.Image("busybox", llb.LinuxArm64).File(
+						llb.Mkfile("/differ.sh", 0o755, differScript),
+					),
+				),
+				llb.AddMount("/original", slv.Local(".")),
+				llb.AddMount("/output", llb.Scratch()),
+				// run example differ, this find changes between /original
+				// and the modified /src directory and copies them to /output
+				llb.Args([]string{"/differ.sh", "/original", "/src", "/output"}),
+			),
 		),
 	)
 
