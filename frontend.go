@@ -2,10 +2,12 @@ package llblib
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -108,6 +110,21 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 					result, err = ref.ToState()
 					if err != nil {
 						return nil, errors.Wrap(err, "failed to convert ref to state")
+					}
+					if config, ok := res.Metadata["containerimage.config"]; ok {
+						result, err = result.WithImageConfig(config)
+						if err != nil {
+							return nil, errors.Wrap(err, "failed to apply image config from frontend request")
+						}
+						// we need to parse the document again bc WithImageConfig
+						// does not apply the USER config.
+						var img ocispecs.Image
+						if err := json.Unmarshal(config, &img); err != nil {
+							return nil, errors.Wrap(err, "failed to parse config from frontend request")
+						}
+						if img.Config.User != "" {
+							result = result.User(img.Config.User)
+						}
 					}
 				}
 				return nil, nil
