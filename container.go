@@ -56,9 +56,8 @@ func (noopWriteCloser) Close() error {
 func WithTTY(in FdReader, out, err io.Writer) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.Tty = true
-		co.Stdin = io.NopCloser(in)
-		co.Stdout = noopWriteCloser{out}
-		co.Stderr = noopWriteCloser{err}
+		WithInput(in).SetContainerOptions(co)
+		WithOutput(out, err).SetContainerOptions(co)
 		co.Setup = append(co.Setup, func(ctx context.Context) error {
 			oldState, err := terminal.MakeRaw(int(in.Fd()))
 			if err != nil {
@@ -107,22 +106,46 @@ func WithTTY(in FdReader, out, err io.Writer) ContainerOption {
 	})
 }
 
-func WithInput(in io.ReadCloser) ContainerOption {
+func WithInput(in io.Reader) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
-		co.Stdin = in
+		if closer, ok := in.(io.ReadCloser); ok {
+			co.Stdin = closer
+		} else {
+			co.Stdin = io.NopCloser(in)
+		}
 	})
 }
 
-func WithOutput(out, err io.WriteCloser) ContainerOption {
+func WithOutput(out, err io.Writer) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
-		co.Stdout = out
-		co.Stderr = err
+		if closer, ok := out.(io.WriteCloser); ok {
+			co.Stdout = closer
+		} else {
+			co.Stdout = noopWriteCloser{out}
+		}
+		if closer, ok := err.(io.WriteCloser); ok {
+			co.Stderr = closer
+		} else {
+			co.Stderr = noopWriteCloser{err}
+		}
 	})
 }
 
 func WithRun(opts ...llb.RunOption) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.runOpts = append(co.runOpts, opts...)
+	})
+}
+
+func WithSetup(s func(ctx context.Context) error) ContainerOption {
+	return containerOptionFunc(func(co *ContainerOptions) {
+		co.Setup = append(co.Setup, s)
+	})
+}
+
+func WithTeardown(t func() error) ContainerOption {
+	return containerOptionFunc(func(co *ContainerOptions) {
+		co.Teardown = append(co.Teardown, t)
 	})
 }
 
@@ -214,6 +237,7 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 			return errors.Wrap(err, "setup failed before container process created")
 		}
 	}
+
 	eg.Go(func() error {
 		<-ctx.Done() // context cancelled when container exits
 		var err error
@@ -242,6 +266,7 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 			}
 		})
 	}
+
 	if co.Signal != nil {
 		eg.Go(func() error {
 			for {
