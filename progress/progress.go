@@ -198,9 +198,6 @@ func (p *progress) Channel(opts ...ChannelOption) chan *client.SolveStatus {
 }
 
 func (p *progress) Label(l string) Progress {
-	if l == "" {
-		return p
-	}
 	return labeledProgress{
 		Progress: p,
 		label:    l,
@@ -213,9 +210,13 @@ type labeledProgress struct {
 }
 
 func (p labeledProgress) Channel(opts ...ChannelOption) chan *client.SolveStatus {
-	opts = append([]ChannelOption{AddLabel(p.label)}, opts...)
+	if p.label != "" {
+		opts = append([]ChannelOption{AddLabel(p.label)}, opts...)
+	}
 	return p.Progress.Channel(opts...)
 }
+
+func (p labeledProgress) Release() {} // no-op, dont release parent progress
 
 func addLabel(label, name string) string {
 	if strings.HasPrefix(name, "[") {
