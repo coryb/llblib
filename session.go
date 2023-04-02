@@ -56,6 +56,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		SessionPreInitialized: true,
 		LocalDirs:             s.localDirs,
 		Session:               attachables,
+		AllowedEntitlements:   req.entitlements,
 	}
 
 	ctx = WithProgress(ctx, s.progress)
