@@ -33,7 +33,6 @@ type Solver interface {
 	Build(st llb.State, opts ...RequestOption) Request
 	Container(root llb.State, opts ...ContainerOption) Request
 
-	Resolver() llb.ImageMetaResolver
 	NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error)
 }
 
@@ -87,7 +86,6 @@ type solver struct {
 	downloads    []bksess.Attachable
 	helpers      []func(ctx context.Context) (release func() error, err error)
 	agentConfigs map[string]sockproxy.AgentConfig
-	resolver     *resolver
 }
 
 var _ Solver = (*solver)(nil)
@@ -260,17 +258,19 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	attachables := []bksess.Attachable{}
 
 	dirSource := filesync.StaticDirSource{}
-	for name, localDir := range s.localDirs {
-		dirSource[name] = filesync.SyncedDir{
-			Dir: localDir,
-			Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
-				st.Uid = 0
-				st.Gid = 0
-				return fsutil.MapResultKeep
-			},
+	if len(s.localDirs) > 0 {
+		for name, localDir := range s.localDirs {
+			dirSource[name] = filesync.SyncedDir{
+				Dir: localDir,
+				Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
+					st.Uid = 0
+					st.Gid = 0
+					return fsutil.MapResultKeep
+				},
+			}
 		}
+		attachables = append(attachables, filesync.NewFSSyncProvider(dirSource))
 	}
-	attachables = append(attachables, filesync.NewFSSyncProvider(dirSource))
 
 	// Attach secret providers to the session.
 	if len(s.secrets) > 0 {
@@ -308,24 +308,28 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		allSessions[attach] = bkSess
 	}
 
-	if s.resolver != nil {
-		if err := s.resolver.start(ctx, cln, p); err != nil {
-			return nil, errors.Wrap(err, "failed to start resolver")
-		}
-		releasers = append(releasers, s.resolver.stop)
-	}
+	resolver := newResolver(ctx, cln, p)
+	releasers = append(releasers, resolver.stop)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	releasers = append(releasers, eg.Wait)
+	waiters := []chan struct{}{}
 	for _, bkSess := range allSessions {
 		bkSess := bkSess
+		done := make(chan struct{})
+		waiters = append(waiters, done)
 		eg.Go(func() error {
-			return bkSess.Run(ctx, cln.Dialer())
+			return bkSess.Run(ctx, func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
+				defer close(done)
+				return cln.Dialer()(ctx, proto, meta)
+			})
 		})
 	}
 
-	// TODO wrap cln.Dialer to close a channel so we can synchronize
-	// the sessions are running before continuing.
+	// ensure all sessions are running
+	for _, waiter := range waiters {
+		<-waiter
+	}
 
 	localDirs := maps.Clone(s.localDirs)
 	return &session{
@@ -334,7 +338,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		releasers:   releasers,
 		client:      cln,
 		localDirs:   localDirs,
-		resolver:    s.resolver,
+		resolver:    resolver,
 		progress:    p,
 	}, nil
 }

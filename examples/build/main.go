@@ -49,11 +49,9 @@ func main() {
 
 	slv := llblib.NewSolver(llblib.WithCwd(localCwd))
 
-	root := llb.Image(
+	root := llblib.ResolvedImage(
 		"golang:1.20",
 		llb.Platform(platform),
-		llb.WithMetaResolver(slv.Resolver()),
-		llb.ResolveDigest(true),
 	).Dir("/")
 
 	mounts := llblib.RunOptions{
@@ -61,11 +59,9 @@ func main() {
 		llb.AddMount("/local", slv.Local(".", llb.IncludePatterns([]string{"*"}), llb.ExcludePatterns([]string{"*"}))),
 		llb.AddMount("/git", llb.Git("https://github.com/moby/buildkit.git", "baaf67ba976460a51ef198abab88baae376c32d8", llb.KeepGitDir())),
 		llb.AddMount("/http", llb.HTTP("https://raw.githubusercontent.com/moby/buildkit/master/README.md", llb.Filename("README.md"), llb.Chmod(0o600))),
-		llb.AddMount("/image", llb.Image(
+		llb.AddMount("/image", llblib.ResolvedImage(
 			"busybox:latest",
 			llb.Platform(platform),
-			llb.WithMetaResolver(slv.Resolver()),
-			llb.ResolveDigest(true),
 		)),
 	}
 
