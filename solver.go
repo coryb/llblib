@@ -16,6 +16,7 @@ import (
 	bksess "github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/filesync"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
+	"github.com/moby/buildkit/util/entitlements"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
@@ -67,13 +68,14 @@ func NewSolver(opts ...SolverOption) Solver {
 }
 
 type Request struct {
-	Label     string
-	state     llb.State
-	exports   []client.ExportEntry
-	download  bksess.Attachable
-	evaluate  bool
-	buildFunc func(context.Context, gateway.Client) (*gateway.Result, error)
-	onError   func(context.Context, gateway.Client, error) error
+	Label        string
+	state        llb.State
+	exports      []client.ExportEntry
+	download     bksess.Attachable
+	evaluate     bool
+	buildFunc    func(context.Context, gateway.Client) (*gateway.Result, error)
+	onError      func(context.Context, gateway.Client, error) error
+	entitlements []entitlements.Entitlement
 }
 
 type solver struct {
@@ -205,6 +207,12 @@ func (f requestOptionFunc) SetRequestOption(r *Request) {
 func WithLabel(l string) RequestOption {
 	return requestOptionFunc(func(r *Request) {
 		r.Label = l
+	})
+}
+
+func WithInsecure() RequestOption {
+	return requestOptionFunc(func(r *Request) {
+		r.entitlements = append(r.entitlements, entitlements.EntitlementSecurityInsecure)
 	})
 }
 
