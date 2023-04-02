@@ -34,7 +34,7 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 
 	// first get the run opts so we can setup defaults, then we will
 	// re-apply the container options again to the "real" ContainerOptions
-	// latera
+	// later
 	tmp := ContainerOptions{}
 	for _, opt := range opts {
 		opt.SetContainerOptions(&tmp)
@@ -84,20 +84,6 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 		containerOpts.Mounts[i].ResultID = se.MountIDs[i]
 	}
 
-	// // also add input as mounts so we might be able to to compare inputs
-	// // from outputs in case we need to detect or manually export changes.
-	// inputMounts := containerOpts.Mounts
-	// for i, inputMount := range inputMounts {
-	// 	if inputMount.MountType == pb.MountType_BIND {
-	// 		inputMount.ResultID = se.InputIDs[i]
-	// 		if inputMount.Dest == "/" {
-	// 			inputMount.Dest = "/input"
-	// 		} else {
-	// 			inputMount.Dest += "-input"
-	// 		}
-	// 		containerOpts.Mounts = append(containerOpts.Mounts, inputMount)
-	// 	}
-	// }
 	for _, opt := range opts {
 		opt.SetContainerOptions(containerOpts)
 	}
