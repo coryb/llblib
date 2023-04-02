@@ -5,11 +5,13 @@ import (
 
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 )
 
 type (
-	progressKey struct{}
-	sessionKey  struct{}
+	progressKey      struct{}
+	sessionKey       struct{}
+	imageResolverKey struct{}
 )
 
 func WithProgress(ctx context.Context, p progress.Progress) context.Context {
@@ -66,4 +68,16 @@ func (nullSession) Release() error {
 
 func (nullSession) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
 	return nil, nil
+}
+
+func WithImageResolver(ctx context.Context, r llb.ImageMetaResolver) context.Context {
+	return context.WithValue(ctx, imageResolverKey{}, r)
+}
+
+func LoadImageResolver(ctx context.Context) llb.ImageMetaResolver {
+	r, ok := ctx.Value(imageResolverKey{}).(llb.ImageMetaResolver)
+	if !ok {
+		return nil
+	}
+	return r
 }

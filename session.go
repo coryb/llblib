@@ -61,6 +61,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 
 	ctx = WithProgress(ctx, s.progress)
 	ctx = WithSession(ctx, s)
+	ctx = WithImageResolver(ctx, s.resolver)
 
 	if req.buildFunc != nil {
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {

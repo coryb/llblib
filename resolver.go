@@ -24,16 +24,6 @@ type resolveRequest struct {
 	response chan<- resolveResponse
 }
 
-func (s *solver) Resolver() llb.ImageMetaResolver {
-	if s.resolver != nil {
-		return s.resolver
-	}
-	s.resolver = &resolver{
-		cache: map[cacheKey]*cacheValue{},
-	}
-	return s.resolver
-}
-
 type cacheKey struct {
 	resolveType llb.ResolverType
 	ref         string
@@ -59,14 +49,12 @@ type resolver struct {
 	cache     map[cacheKey]*cacheValue
 }
 
-func (r *resolver) start(ctx context.Context, cln *client.Client, p progress.Progress) error {
-	r.mu.Lock()
-	if r.resolveCh != nil || r.done != nil {
-		return errors.New("resolver started multiple times")
+func newResolver(ctx context.Context, cln *client.Client, p progress.Progress) *resolver {
+	r := &resolver{
+		cache:     map[cacheKey]*cacheValue{},
+		resolveCh: make(chan resolveRequest),
+		done:      make(chan error),
 	}
-	r.resolveCh = make(chan resolveRequest)
-	r.done = make(chan error)
-	r.mu.Unlock()
 
 	go func() {
 		_, err := cln.Build(ctx, client.SolveOpt{}, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
@@ -88,7 +76,7 @@ func (r *resolver) start(ctx context.Context, cln *client.Client, p progress.Pro
 		}
 		close(r.done)
 	}()
-	return nil
+	return r
 }
 
 func (r *resolver) stop() error {
