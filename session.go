@@ -3,7 +3,6 @@ package llblib
 import (
 	"context"
 	goerrors "errors"
-	"log"
 
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
@@ -34,13 +33,13 @@ func (s *session) Release() error {
 	for _, sess := range s.allSessions {
 		sess.Close()
 	}
-	// FIXME group errors
+	var err error
 	for _, r := range s.releasers {
-		if err := r(); err != nil {
-			log.Printf("release error: %s", err)
+		if e := r(); err != nil {
+			err = goerrors.Join(err, e)
 		}
 	}
-	return nil
+	return err
 }
 
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
