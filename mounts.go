@@ -15,6 +15,7 @@ type MountPropagator interface {
 	ApplyMount(target string, opts ...llb.StateOption)
 	Root() llb.State
 	GetMount(target string) llb.State
+	AsRun() llb.RunOption
 	Copy() MountPropagator
 }
 
@@ -57,6 +58,21 @@ func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 	for _, target := range targets {
 		pm.states[target] = execState.GetMount(target)
 	}
+}
+
+func (pm *persistentMounts) AsRun() llb.RunOption {
+	runOpts := RunOptions{}
+	for _, o := range pm.opts {
+		ei := llb.ExecInfo{}
+		o.SetRunOption(&ei)
+		for i, eim := range ei.Mounts {
+			if st, ok := pm.states[eim.Target]; ok {
+				ei.Mounts[i].Source = st.Output()
+			}
+		}
+		runOpts = append(runOpts, mountPropagatorRunOption{&ei})
+	}
+	return runOpts
 }
 
 func (pm *persistentMounts) Add(opts ...llb.RunOption) {
