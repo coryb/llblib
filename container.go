@@ -38,6 +38,9 @@ type ContainerOptions struct {
 	Setup    []func(context.Context) error
 	Teardown []func() error
 	runOpts  []llb.RunOption
+	// dropErr will suppress the original build error when
+	// handling onError containers
+	dropErr bool
 }
 
 type FdReader interface {

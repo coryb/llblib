@@ -66,7 +66,10 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			res, err := req.buildFunc(ctx, c)
 			if err != nil && req.onError != nil {
-				moreErr := req.onError(ctx, c, err)
+				dropErr, moreErr := req.onError(ctx, c, err)
+				if dropErr {
+					return nil, moreErr
+				}
 				return nil, goerrors.Join(err, moreErr)
 			}
 			return res, err
@@ -90,7 +93,10 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		}
 		res, err := c.Solve(ctx, gwReq)
 		if err != nil && req.onError != nil {
-			moreErr := req.onError(ctx, c, err)
+			dropErr, moreErr := req.onError(ctx, c, err)
+			if dropErr {
+				return nil, moreErr
+			}
 			return nil, goerrors.Join(err, moreErr)
 		}
 		return res, nil

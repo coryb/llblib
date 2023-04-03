@@ -11,18 +11,28 @@ import (
 	"github.com/pkg/errors"
 )
 
+func DropBuildError(b bool) ContainerOption {
+	return containerOptionFunc(func(co *ContainerOptions) {
+		co.dropErr = b
+	})
+}
+
 func OnError(opts ...ContainerOption) RequestOption {
+	co := &ContainerOptions{}
+	for _, opt := range opts {
+		opt.SetContainerOptions(co)
+	}
 	return requestOptionFunc(func(r *Request) {
 		r.evaluate = true
-		r.onError = func(ctx context.Context, c gateway.Client, err error) error {
+		r.onError = func(ctx context.Context, c gateway.Client, err error) (bool, error) {
 			if err == nil {
-				return nil
+				return false, nil
 			}
 			var se *errdefs.SolveError
 			if errors.As(err, &se) {
-				return errContainer(ctx, c, se, opts...)
+				return co.dropErr, errContainer(ctx, c, se, opts...)
 			}
-			return nil // the original error is handled externally
+			return false, nil // the original error is handled externally
 		}
 	})
 }

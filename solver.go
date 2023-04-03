@@ -73,7 +73,7 @@ type Request struct {
 	download     bksess.Attachable
 	evaluate     bool
 	buildFunc    func(context.Context, gateway.Client) (*gateway.Result, error)
-	onError      func(context.Context, gateway.Client, error) error
+	onError      func(context.Context, gateway.Client, error) (dropErr bool, err error)
 	entitlements []entitlements.Entitlement
 }
 
