@@ -2,12 +2,10 @@ package llblib
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/coryb/llblib/sockproxy"
 	"github.com/moby/buildkit/client/llb"
@@ -16,8 +14,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// ForwardOption is the same as the llb.SSHOption, but renamed since it can
+// be used without SSH for generic forwarding of tcp and unix sockets.
 type ForwardOption = llb.SSHOption
 
+// Chmod is a wrapper over os.FileMode to implement various llb options.
 type Chmod os.FileMode
 
 var (
@@ -26,18 +27,22 @@ var (
 	_ llb.SecretOption = (*Chmod)(nil)
 )
 
+// WithChmod creates a Chmod option with the provided os.FileMode.
 func WithChmod(mode os.FileMode) Chmod {
 	return Chmod(mode)
 }
 
+// SetCopyOption implements the llb.CopyOption interface.
 func (c Chmod) SetCopyOption(ci *llb.CopyInfo) {
 	ci.Mode = (*os.FileMode)(&c)
 }
 
+// SetSSHOption implements the llb.SSHOption and ForwardOption interfaces.
 func (c Chmod) SetSSHOption(si *llb.SSHInfo) {
 	si.Mode = (int)(c)
 }
 
+// SetSecretOption implements the llb.SecretOption interface.
 func (c Chmod) SetSecretOption(si *llb.SecretInfo) {
 	si.Mode = (int)(c)
 }
@@ -81,7 +86,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 	case "tcp":
 		id = digest.FromString(src).String()
 		helper := func(ctx context.Context) (release func() error, err error) {
-			dir, err := ioutil.TempDir("", "forward")
+			dir, err := os.MkdirTemp("", "forward")
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create tmp dir for forwarding sock")
 			}
@@ -119,7 +124,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 				defer os.RemoveAll(dir)
 
 				err := l.Close()
-				if err != nil && !isClosedNetworkError(err) {
+				if err != nil && !errors.Is(err, net.ErrClosed) {
 					return errors.Wrap(err, "failed to close listener")
 				}
 
@@ -128,7 +133,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 
 			g.Go(func() error {
 				err := sockproxy.Run(l, dialerFunc)
-				if err != nil && !isClosedNetworkError(err) {
+				if err != nil && !errors.Is(err, net.ErrClosed) {
 					return err
 				}
 				return nil
@@ -150,10 +155,4 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 	}, opts...)
 
 	return llb.AddSSHSocket(opts...)
-}
-
-func isClosedNetworkError(err error) bool {
-	// ErrNetClosing is hidden in an internal golang package so we can't use
-	// errors.Is: https://golang.org/src/internal/poll/fd.go
-	return strings.Contains(err.Error(), "use of closed network connection")
 }

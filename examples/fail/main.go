@@ -1,3 +1,5 @@
+// Package main demonstrates llblib.OnError handling to run a command in the
+// modified state of a failed solve request.
 package main
 
 import (
@@ -35,7 +37,12 @@ func main() {
 	p.Run(llb.Shlex("touch /src/src-foobar"), llblib.IgnoreCache())
 	p.Run(llb.Shlex("false")) // <- trigger /bin/bash on error
 
-	req := slv.Build(p.GetMount("/scratch"),
+	scratch, ok := p.GetMount("/scratch")
+	if !ok {
+		log.Panic("mount for /scratch missing!")
+	}
+
+	req := slv.Build(scratch,
 		llblib.Download("."),
 		llblib.OnError(
 			llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr),
@@ -56,7 +63,7 @@ func main() {
 	)
 
 	prog := progress.NewProgress()
-	defer prog.Release()
+	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cli, prog)
 	if err != nil {

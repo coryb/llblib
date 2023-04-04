@@ -14,10 +14,12 @@ type (
 	imageResolverKey struct{}
 )
 
+// WithProgress returns a context with the provided Progress stored.
 func WithProgress(ctx context.Context, p progress.Progress) context.Context {
 	return context.WithValue(ctx, progressKey{}, p)
 }
 
+// LoadProgress returns a progress stored on the context, or a no-op progress.
 func LoadProgress(ctx context.Context) progress.Progress {
 	p, ok := ctx.Value(progressKey{}).(progress.Progress)
 	if !ok {
@@ -30,10 +32,10 @@ type nullProgress struct{}
 
 var _ progress.Progress = (*nullProgress)(nil)
 
-func (p nullProgress) Release() {}
-func (p nullProgress) Sync()    {}
-func (p nullProgress) Pause()   {}
-func (p nullProgress) Resume()  {}
+func (p nullProgress) Close() error { return nil }
+func (p nullProgress) Sync() error  { return nil }
+func (p nullProgress) Pause() error { return nil }
+func (p nullProgress) Resume()      {}
 func (p nullProgress) Label(string) progress.Progress {
 	return p
 }
@@ -48,10 +50,12 @@ func (p nullProgress) Channel(opts ...progress.ChannelOption) chan *client.Solve
 	return ch
 }
 
+// WithSession returns a context with the provided session stored.
 func WithSession(ctx context.Context, s Session) context.Context {
 	return context.WithValue(ctx, sessionKey{}, s)
 }
 
+// LoadSession returns a session stored on the context, or a no-op session.
 func LoadSession(ctx context.Context) Session {
 	s, ok := ctx.Value(sessionKey{}).(Session)
 	if !ok {
@@ -70,10 +74,14 @@ func (nullSession) Do(ctx context.Context, req Request) (*client.SolveResponse, 
 	return nil, nil
 }
 
+// WithImageResolver returns a context with the provided llb.ImageMetaResovler
+// stored.
 func WithImageResolver(ctx context.Context, r llb.ImageMetaResolver) context.Context {
 	return context.WithValue(ctx, imageResolverKey{}, r)
 }
 
+// LoadImageResolver returns a llb.ImageMetaResolver stored on the context,
+// or will return `nil` if no resolver is found.
 func LoadImageResolver(ctx context.Context) llb.ImageMetaResolver {
 	r, ok := ctx.Value(imageResolverKey{}).(llb.ImageMetaResolver)
 	if !ok {

@@ -1,3 +1,6 @@
+// Package main demonstrates running a reasonably complex Go build with
+// with persistent caching, and then using llblib.Download to export the results
+// of the build to the local directory.
 package main
 
 import (
@@ -89,17 +92,20 @@ func main() {
 	}
 
 	reqs := []llblib.Request{}
-
+	changed, ok := p.GetMount(localCwd)
+	if !ok {
+		log.Panicf("mount for %s missing!", localCwd)
+	}
 	reqs = append(reqs,
 		slv.Build(
-			llb.Diff(workspace, p.GetMount(localCwd)),
+			llb.Diff(workspace, changed),
 			llblib.WithLabel("my-build"),
 			llblib.Download("."),
 		),
 	)
 
 	prog := progress.NewProgress()
-	defer prog.Release()
+	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cln, prog)
 	if err != nil {

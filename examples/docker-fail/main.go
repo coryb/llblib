@@ -1,3 +1,5 @@
+// Package main demonstrates using llblib.OnError on get a shell in the modified
+// state of a failed docker build using a request built with llblib.Frontend.
 package main
 
 import (
@@ -39,7 +41,7 @@ func main() {
 	))
 
 	prog := progress.NewProgress(progress.WithConsole(console.Current()))
-	defer prog.Release()
+	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cli, prog)
 	if err != nil {

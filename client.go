@@ -6,20 +6,53 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
-	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
-	_ "github.com/moby/buildkit/client/connhelper/kubepod"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	// provide the docker-container://<name> scheme for buildkit address
+	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
+	// provide the kube-pod://<pod> scheme for the buildkit address
+	_ "github.com/moby/buildkit/client/connhelper/kubepod"
 )
 
+type grpcError interface{ GRPCStatus() *status.Status }
+
+// NewClient will return a new buildkit client.  It will verify the client
+// connection by calling the client.Info function when available, otherwise will
+// call client.ListWorkers.  If the provided addr is empty, we attempt to use
+// the buildkit service running in your local docker daemon.
+//
+// To use the latest buildkit you can run buildkit via docker or run your own
+// service deployment.  To run via docker first start the container:
+//
+//	docker run -d --name buildkitd --privileged moby/buildkit:latest
+//
+// Then use this `addr` value: `docker-container://buildkitd`
 func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
 	cln, err := newClient(ctx, addr, opts)
 	if err != nil {
 		return nil, err
 	}
-	// if _, err = cln.ListWorkers(ctx); err != nil {
-	// 	cln.Close()
-	// 	return nil, errors.Wrap(err, "unable to connect to buildkitd")
-	// }
+
+	if _, err := cln.Info(ctx); err != nil {
+		// Info is not implemented on older buildkit servers shipped
+		// with docker.
+		var grpcErr grpcError
+		if !errors.As(err, &grpcErr) || grpcErr.GRPCStatus().Code() != codes.Unimplemented {
+			cln.Close()
+			return nil, errors.Wrapf(err, "unable to connect to buildkitd [code: %d]", grpcErr.GRPCStatus().Code())
+		}
+	} else {
+		return cln, nil
+	}
+
+	// If we are still here then Info is Unimplemented, so fallback to
+	// ListWorkers which can be a bit slower
+	if _, err := cln.ListWorkers(ctx); err != nil {
+		cln.Close()
+		return nil, errors.Wrap(err, "unable to connect to buildkitd")
+	}
 	return cln, nil
 }
 

@@ -1,3 +1,5 @@
+// Package main demonstrates using llblib.Forward to allow the buildkit solve
+// to connect to a service running on your local host.
 package main
 
 import (
@@ -56,7 +58,7 @@ func main() {
 	}()
 
 	prog := progress.NewProgress()
-	defer prog.Release()
+	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cli, prog)
 	if err != nil {

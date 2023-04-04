@@ -11,13 +11,13 @@ linters:
     - govet
     - ineffassign
     - misspell
-    # FIXME add godocs to code
-    # - revive
+    - revive
     - typecheck
     - unconvert
     - unparam
     - unused
     - exportloopref
+    - staticcheck
 
 issues:
   exclude-use-default: false

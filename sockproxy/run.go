@@ -5,6 +5,9 @@ import (
 	"net"
 )
 
+// Run will start the proxy.  This must be done before using the
+// session.Attachable in a buildkit solve request.  To release resources you
+// MUST Close the provided listener when done using the proxy.
 func Run(l net.Listener, dialer func() (net.Conn, error)) error {
 	for {
 		proxy, err := l.Accept()

@@ -11,6 +11,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+// OnError can be used to modify a Request to run a customized container with
+// with the mount context from the failed buildkit request.  This can be used
+// for special handling of solves that are not "exportable" from buildkit since
+// buildkit will not export a failed solve request.  For example to get a
+// shell in a container with the same modified "dirty" state of the files post
+// failed-build, you can use:
+//
+//	llblib.OnError(
+//		llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr),
+//		llblib.WithRun(llb.Args([]string{"/bin/sh"})),
+//	)
 func OnError(opts ...ContainerOption) RequestOption {
 	return requestOptionFunc(func(r *Request) {
 		r.evaluate = true

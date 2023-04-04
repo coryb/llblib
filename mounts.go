@@ -1,24 +1,45 @@
 package llblib
 
 import (
-	"fmt"
-
 	"github.com/moby/buildkit/client/llb"
 	"golang.org/x/exp/maps"
 )
 
+// MountPropagator manages a collection of llb.States and run Mounts. As
+// Runs are applies to the MountPropagator the modified state of the root
+// and all attached mounts are propagated such that future Runs will see
+// changes made by prior Runs.
 type MountPropagator interface {
-	Run(...llb.RunOption)
 	// Add will append a RunOption to the list of propagated options.
 	Add(...llb.RunOption)
+	// ApplyMount will apply the provide llb.StateOptions to the mount at
+	// `mountpoint`.  If there is no mount present matching `mountpoint` then a
+	// new llb.Scratch will be created and the llb.StateOptions will be applied
+	// to that state.
+	ApplyMount(mountpoint string, opts ...llb.StateOption)
+	// ApplyRoot will apply the provided llb.StateOptions to the root mount.
 	ApplyRoot(...llb.StateOption)
-	ApplyMount(target string, opts ...llb.StateOption)
-	Root() llb.State
-	GetMount(target string) llb.State
+	// AsRun is used to extract the current state of all mounts (and associated
+	// RunOptions via Add) so that they can be applied to an `llb.Run`
+	// operation.
 	AsRun() llb.RunOption
+	// Copy creates a new MountPropagator with copies of the parents RunOptions
+	// and llb.States.  Note that the RunOptions and llb.States themselves are
+	// only shallow copied.
 	Copy() MountPropagator
+	// GetMount returns the llb.State for the modified mount found at
+	// `mountpoint`.  If the mountpoint is not found, then llb.Scratch will
+	// returned and `ok` will be set to false.
+	GetMount(mountpoint string) (state llb.State, ok bool)
+	// Run will mutate the state by applying the Run to the root and mountpoints
+	// while preserving any changes for future Run statements.
+	Run(...llb.RunOption)
+	// Root will return the llb.State for the modified root "/" mount.
+	Root() llb.State
 }
 
+// Persistent returns a MountPropagator for the provided root llb.State and
+// any mounts found in the llb.RunOptions.
 func Persistent(root llb.State, opts ...llb.RunOption) MountPropagator {
 	pm := &persistentMounts{
 		opts:   opts,
@@ -38,7 +59,7 @@ var _ MountPropagator = (*persistentMounts)(nil)
 
 func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 	runOpts := []llb.RunOption{}
-	targets := []string{}
+	mountpoints := []string{}
 	for _, o := range pm.opts {
 		ei := llb.ExecInfo{}
 		o.SetRunOption(&ei)
@@ -46,7 +67,7 @@ func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 			if st, ok := pm.states[eim.Target]; ok {
 				ei.Mounts[i].Source = st.Output()
 			}
-			targets = append(targets, eim.Target)
+			mountpoints = append(mountpoints, eim.Target)
 		}
 		runOpts = append(runOpts, mountPropagatorRunOption{&ei})
 	}
@@ -55,8 +76,8 @@ func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 
 	execState := pm.root.Run(runOpts...)
 	pm.root = execState.Root()
-	for _, target := range targets {
-		pm.states[target] = execState.GetMount(target)
+	for _, mountpoint := range mountpoints {
+		pm.states[mountpoint] = execState.GetMount(mountpoint)
 	}
 }
 
@@ -96,15 +117,15 @@ func (pm *persistentMounts) ApplyRoot(opts ...llb.StateOption) {
 	}
 }
 
-func (pm *persistentMounts) ApplyMount(target string, opts ...llb.StateOption) {
-	mount, ok := pm.states[target]
+func (pm *persistentMounts) ApplyMount(mountpoint string, opts ...llb.StateOption) {
+	mount, ok := pm.states[mountpoint]
 	if !ok {
 		mount = llb.Scratch()
 	}
 	for _, opt := range opts {
 		mount = opt(mount)
 	}
-	pm.states[target] = mount
+	pm.states[mountpoint] = mount
 }
 
 type mountPropagatorRunOption struct {
@@ -157,15 +178,16 @@ func (pm persistentMounts) Root() llb.State {
 	return pm.root
 }
 
-func (pm persistentMounts) GetMount(target string) llb.State {
-	st, ok := pm.states[target]
+func (pm persistentMounts) GetMount(mountpoint string) (llb.State, bool) {
+	st, ok := pm.states[mountpoint]
 	if !ok {
-		// this should never happen
-		panic(fmt.Sprintf("mount state missing for target %q", target))
+		return llb.Scratch(), false
 	}
-	return st
+	return st, true
 }
 
+// File implements an llb.StateOption where the provided llb.FileAction is
+// applied to the llb.State.
 func File(a *llb.FileAction, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(st llb.State) llb.State {
 		return st.File(a, opts...)
