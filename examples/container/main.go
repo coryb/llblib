@@ -1,3 +1,5 @@
+// Package main demonstrates running an ad-hoc container on the buildkit
+// service using a combination of various mount sources.
 package main
 
 import (
@@ -42,7 +44,7 @@ func main() {
 	)
 
 	prog := progress.NewProgress(progress.WithConsole(console.Current()))
-	defer prog.Release()
+	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cli, prog)
 	if err != nil {

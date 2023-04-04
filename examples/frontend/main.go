@@ -1,3 +1,6 @@
+// Package main demonstrates how to use llblib.Frontend to solve a Dockerfile
+// This is roughly equivalent to running `docker build .` where the Dockerfile
+// is using `#syntax docker/dockerfile`.
 package main
 
 import (
@@ -36,7 +39,7 @@ func main() {
 	)
 
 	prog := progress.NewProgress()
-	defer prog.Release()
+	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cli, prog)
 	if err != nil {

@@ -3,7 +3,6 @@ package sockproxy
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"time"
@@ -18,10 +17,16 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// AgentConfig holds data necessary for to create a tcp forwarding agent.
 type AgentConfig struct {
-	ID    string
+	// ID should be a digest string that uniquely identifies this config.
+	ID string
+	// Path is the list of paths to forward.  If empty, SSH_AUTH_SOCK will be
+	// used unless SSH is false.
 	Paths []string
-	SSH   bool
+	// SSH when true will fall back to forward the file located at the
+	// SSH_AUTH_SOCK environment variable.
+	SSH bool
 }
 
 // NewProvider creates a session provider for arbitrary socket forwarding by
@@ -167,7 +172,7 @@ func toAgentSource(paths []string) (source, error) {
 		if err != nil {
 			return source{}, errors.Wrapf(err, "failed to open %s", p)
 		}
-		dt, err := ioutil.ReadAll(&io.LimitedReader{R: f, N: 100 * 1024})
+		dt, err := io.ReadAll(&io.LimitedReader{R: f, N: 100 * 1024})
 		if err != nil {
 			return source{}, errors.Wrapf(err, "failed to read %s", p)
 		}

@@ -13,13 +13,18 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 )
 
-const unsetArgsSentinel = "/dev/null"
+// unsetArgsSentinel is used to populate llb.Args for cases where we don't
+// actually want the Args from the state.  Args are required via the ExecOp
+// Validate when we try marshal the ExecOp when trying to extract details to
+// apply to gateway.NewContainerRequest and gateway.StartRequest.
+const unsetArgsSentinel = ""
 
+// ContainerOption allows configuring an ad-hoc container.
 type ContainerOption interface {
 	SetContainerOptions(*ContainerOptions)
 }
@@ -30,12 +35,20 @@ func (f containerOptionFunc) SetContainerOptions(co *ContainerOptions) {
 	f(co)
 }
 
+// ContainerOptions are options used to create ad-hoc containers in buildkit.
 type ContainerOptions struct {
+	// NewContainerRequest describes the state of the container to be created.
 	gateway.NewContainerRequest
+	// StartRequest describes the process to be run (pid 1) in the container.
 	gateway.StartRequest
-	Resize   <-chan gateway.WinSize
-	Signal   <-chan syscall.Signal
-	Setup    []func(context.Context) error
+	// Resize is used to send tty resize events
+	Resize <-chan gateway.WinSize
+	// Signal is used to send signals to the pid 1 process
+	Signal <-chan syscall.Signal
+	// Setup are callbacks that will be executed after the pid 1 process has
+	// started.
+	Setup []func(context.Context) error
+	// Teardown are callbacks that are executed after the pid 1 has exited
 	Teardown []func() error
 	runOpts  []llb.RunOption
 	// dropErr will suppress the original build error when
@@ -43,6 +56,7 @@ type ContainerOptions struct {
 	dropErr bool
 }
 
+// FdReader is an io.Reader that has a Fd file descriptor.
 type FdReader interface {
 	io.Reader
 	Fd() uintptr
@@ -56,18 +70,20 @@ func (noopWriteCloser) Close() error {
 	return nil
 }
 
+// WithTTY will run the container with the provided in/out/err connected to the
+// tty in the container.  Resize events will automatically be propagated.
 func WithTTY(in FdReader, out, err io.Writer) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.Tty = true
 		WithInput(in).SetContainerOptions(co)
 		WithOutput(out, err).SetContainerOptions(co)
 		co.Setup = append(co.Setup, func(ctx context.Context) error {
-			oldState, err := terminal.MakeRaw(int(in.Fd()))
+			oldState, err := term.MakeRaw(int(in.Fd()))
 			if err != nil {
 				return errors.Wrap(err, "failed to set terminal input to raw mode")
 			}
 			co.Teardown = append(co.Teardown, func() error {
-				return terminal.Restore(int(in.Fd()), oldState)
+				return term.Restore(int(in.Fd()), oldState)
 			})
 			resize := make(chan gateway.WinSize, 1)
 			co.Resize = resize
@@ -109,6 +125,7 @@ func WithTTY(in FdReader, out, err io.Writer) ContainerOption {
 	})
 }
 
+// WithInput will set stdin in the container to the provided reader.
 func WithInput(in io.Reader) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		if closer, ok := in.(io.ReadCloser); ok {
@@ -119,6 +136,8 @@ func WithInput(in io.Reader) ContainerOption {
 	})
 }
 
+// WithOutput will set the stdout and stderr in the container to the provided
+// writers.
 func WithOutput(out, err io.Writer) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		if closer, ok := out.(io.WriteCloser); ok {
@@ -134,18 +153,29 @@ func WithOutput(out, err io.Writer) ContainerOption {
 	})
 }
 
+// WithRun will apply the provide llb.RunOption to the container process.  This
+// can be used to set the command to be run and mounts etc.
+//
+//	llblib.WithRun(
+//		llb.AddMount("/", llb.Image("busybox", llb.LinuxArm64)),
+//		llb.Args([]string{"/bin/sh"}),
+//	)
 func WithRun(opts ...llb.RunOption) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.runOpts = append(co.runOpts, opts...)
 	})
 }
 
+// WithSetup can be used to start callbacks after the container process has
+// started.
 func WithSetup(s func(ctx context.Context) error) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.Setup = append(co.Setup, s)
 	})
 }
 
+// WithTeardown can be used to cleanup resources after the container process has
+// exited.
 func WithTeardown(t func() error) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.Teardown = append(co.Teardown, t)

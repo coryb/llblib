@@ -12,9 +12,12 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// Session provides a long running session used to solve requests.
 type Session interface {
-	Release() error
+	// Do will attempt execute the provided request
 	Do(ctx context.Context, req Request) (*client.SolveResponse, error)
+	// Release will ensure resources are released for the session.
+	Release() error
 }
 
 type session struct {

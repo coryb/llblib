@@ -12,16 +12,30 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 )
 
+// Progress defines functions for a buildkit progress display.
 type Progress interface {
-	Release()
-	Sync()
-	Pause()
-	Resume()
+	// Channel returns a new buildkit client.SolveStatus channel used for
+	// buildkit to send messages to the progress display.
 	Channel(opts ...ChannelOption) chan *client.SolveStatus
+	// Label returns a new Progress where all messages will have the provided
+	// label prepended to displayed messages.  Close MUST be called on the
+	// returned Progress to free resources.
 	Label(string) Progress
+	// Pause will sync the Progress, then prevent further messages from being
+	// written to the display channels.  Resume MUST be called after Pause.
+	Pause() error
+	// Resume will unblock the display channels so messages will start
+	// displaying after a Pause.
+	Resume()
+	// Close MUST be called to release resources used and ensures all in-flight
+	// messages have been handled.
+	Close() error
+	// Sync will ensure all in-flight messages have been handled.
+	Sync() error
 }
 
-type ProgressOption interface {
+// Option can be used to customize the progress display.
+type Option interface {
 	SetProgressOption(p *progress)
 }
 
@@ -31,22 +45,29 @@ func (f progressOptionFunc) SetProgressOption(p *progress) {
 	f(p)
 }
 
-func WithConsole(c console.Console) ProgressOption {
+// WithConsole is used to direct the "tty" buildkit output to the provided
+// console. Typically used like:
+//
+//	progress.NewProgress(progress.WithConsole(console.Current()))
+func WithConsole(c console.Console) Option {
 	return progressOptionFunc(func(p *progress) {
 		p.console = c
 	})
 }
 
-func WithOutput(w io.Writer) ProgressOption {
+// WithOutput is used to direct the "plain" buildkit output to an io.Writer.
+func WithOutput(w io.Writer) Option {
 	return progressOptionFunc(func(p *progress) {
 		p.writer = w
 	})
 }
 
-func NewProgress(opts ...ProgressOption) Progress {
+// NewProgress creates a new Progress display to use with buildkit solves.
+// Close MUST be called on the returned progress to clean-up resources.
+func NewProgress(opts ...Option) Progress {
 	p := &progress{
 		statusCh: make(chan *client.SolveStatus),
-		done:     make(chan struct{}),
+		done:     make(chan error),
 		writer:   os.Stdout,
 		seen:     map[seenKey]struct{}{},
 	}
@@ -72,7 +93,7 @@ type progress struct {
 	children  int
 	childCond sync.Cond
 	mu        sync.Mutex
-	done      chan struct{}
+	done      chan error
 
 	seenMu sync.Mutex
 	seen   map[seenKey]struct{} // TODO this should probably be an LRU
@@ -80,41 +101,48 @@ type progress struct {
 
 func (p *progress) start() {
 	go func() {
-		defer close(p.done)
-		progressui.DisplaySolveStatus(context.Background(), "", p.console, p.writer, p.statusCh)
+		_, err := progressui.DisplaySolveStatus(context.Background(), "", p.console, p.writer, p.statusCh)
+		p.done <- err
+		close(p.done)
 	}()
 }
 
-func (p *progress) Release() {
+func (p *progress) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for p.children > 0 {
 		p.childCond.Wait()
 	}
 	close(p.statusCh)
-	<-p.done
+	return <-p.done
 }
 
-func (p *progress) Sync() {
+func (p *progress) Sync() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.sync()
+	if err := p.sync(); err != nil {
+		return err
+	}
 	p.start()
+	return nil
 }
 
 // sync is a helper function to share sync logic between Sync and Pause.
 // The p.mu lock *must* be held before calling this
-func (p *progress) sync() {
+func (p *progress) sync() error {
 	close(p.statusCh)
-	<-p.done
+	if err := <-p.done; err != nil {
+		return err
+	}
 	// we are sync'd so lets restart
-	p.done = make(chan struct{})
+	p.done = make(chan error)
 	p.statusCh = make(chan *client.SolveStatus)
+	return nil
 }
 
-func (p *progress) Pause() {
+func (p *progress) Pause() error {
 	p.mu.Lock()
-	p.sync()
+	return p.sync()
 }
 
 func (p *progress) Resume() {
@@ -122,6 +150,8 @@ func (p *progress) Resume() {
 	p.mu.Unlock()
 }
 
+// ChannelOption can be used to customize how a specific display channel handles
+// messages.
 type ChannelOption interface {
 	SetChannelOption(*channelOption)
 }
@@ -132,6 +162,8 @@ func (f channelOptionFunc) SetChannelOption(co *channelOption) {
 	f(co)
 }
 
+// AddLabel will return a specific display channel where all messages will have
+// the provided label prepended.
 func AddLabel(l string) ChannelOption {
 	return channelOptionFunc(func(co *channelOption) {
 		if l == "" {
@@ -216,7 +248,9 @@ func (p labeledProgress) Channel(opts ...ChannelOption) chan *client.SolveStatus
 	return p.Progress.Channel(opts...)
 }
 
-func (p labeledProgress) Release() {} // no-op, dont release parent progress
+func (p labeledProgress) Close() error {
+	return nil // no-op, dont release parent progress
+}
 
 func addLabel(label, name string) string {
 	if strings.HasPrefix(name, "[") {

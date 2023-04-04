@@ -7,6 +7,7 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
+// Digest returns the digest for the state.
 func Digest(st llb.State) (digest.Digest, error) {
 	ctx := context.Background()
 	c := &llb.Constraints{}

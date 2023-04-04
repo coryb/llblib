@@ -7,10 +7,11 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
+// FrontendOption can be used to modify a Frontend request.
 type FrontendOption interface {
 	SetFrontendOption(*frontendOptions)
 }
@@ -21,18 +22,24 @@ func (f frontendOptionFunc) SetFrontendOption(fo *frontendOptions) {
 	f(fo)
 }
 
+// FrontendInput will attach the provided llb.State with the given name to
+// the Frontend request.
 func FrontendInput(name string, st llb.State) FrontendOption {
 	return frontendOptionFunc(func(fo *frontendOptions) {
 		fo.Inputs[name] = st
 	})
 }
 
+// FrontendOpt will add the name/value pair to the Opts for the Frontend
+// request.
 func FrontendOpt(name, value string) FrontendOption {
 	return frontendOptionFunc(func(fo *frontendOptions) {
 		fo.Opts[name] = value
 	})
 }
 
+// WithCustomName allows using the provided text for the progress display when
+// solving the Frontend request.
 func WithCustomName(name string) FrontendOption {
 	return frontendOptionFunc(func(fo *frontendOptions) {
 		fo.ConstraintsOpts = append(fo.ConstraintsOpts, llb.WithCustomName(name))
@@ -60,6 +67,16 @@ func (o constraintsToOptions) SetConstraintsOption(c *llb.Constraints) {
 	}
 }
 
+// Frontend will create an llb.State that is created via a frontend Request.
+// One common frontend is the `docker/dockerfile` frontend that is used
+// by `docker buildx` commands.  The `source` argument is the image ref
+// that is run as the frontend.  A Frontend request is the same as
+// using the  `#syntax` directive in a Dockerfile. For example:
+//
+//	image := llblib.Frontend("docker/dockerfile",
+//		llblib.FrontendInput("context", context),
+//		llblib.FrontendInput("dockerfile", dockerfile),
+//	)
 func Frontend(source string, opts ...FrontendOption) llb.State {
 	return llb.Scratch().Async(func(ctx context.Context, st llb.State, constraints *llb.Constraints) (llb.State, error) {
 		fo := frontendOptions{
@@ -118,7 +135,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 						}
 						// we need to parse the document again bc WithImageConfig
 						// does not apply the USER config.
-						var img ocispecs.Image
+						var img specsv1.Image
 						if err := json.Unmarshal(config, &img); err != nil {
 							return nil, errors.Wrap(err, "failed to parse config from frontend request")
 						}
