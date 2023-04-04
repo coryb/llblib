@@ -45,3 +45,8 @@ func (NullOption) SetRunOption(*llb.ExecInfo)              {}
 func (NullOption) SetSSHOption(*llb.SSHInfo)               {}
 func (NullOption) SetSecretOption(*llb.SecretInfo)         {}
 func (NullOption) SetTmpfsOption(*llb.TmpfsInfo)           {}
+
+// State implements llb.StateOption
+func (NullOption) State(s llb.State) llb.State {
+	return s
+}
