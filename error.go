@@ -11,6 +11,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+// DropBuildError will cause OnError handlers to suppress the original error
+// that triggered the OnError event.
 func DropBuildError(b bool) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.dropErr = b
