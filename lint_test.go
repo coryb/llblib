@@ -26,13 +26,17 @@ func (tw testWriter) Write(p []byte) (n int, err error) {
 }
 
 func TestLint(t *testing.T) {
-	ctx, timeout := context.WithTimeout(context.Background(), 60*time.Second)
-	defer timeout()
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
 
 	cln, err := llblib.NewClient(ctx, "")
 	if err != nil {
 		t.Errorf("Failed to create client: %s", err)
 	}
+	t.Cleanup(func() {
+		cln.Close()
+	})
 
 	cwd, _ := os.Getwd()
 	currentPlatform := specsv1.Platform{
@@ -72,14 +76,17 @@ func TestLint(t *testing.T) {
 	req := slv.Build(st)
 
 	prog := progress.NewProgress(progress.WithOutput(&testWriter{t}))
-	defer prog.Close()
+	t.Cleanup(func() {
+		prog.Close()
+	})
 
 	sess, err := slv.NewSession(ctx, cln, prog)
 	if err != nil {
 		t.Errorf("failed to create session: %s", err)
 	}
-	defer sess.Release()
-
+	t.Cleanup(func() {
+		sess.Release()
+	})
 	_, err = sess.Do(ctx, req)
 	if err != nil {
 		t.Errorf("solve failed: %s", err)

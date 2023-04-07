@@ -33,15 +33,19 @@ type session struct {
 var _ Session = (*session)(nil)
 
 func (s *session) Release() error {
-	for _, sess := range s.allSessions {
-		sess.Close()
-	}
+	// releasers are called in lifo order, then we finally close all the
+	// active sessions
 	var err error
-	for _, r := range s.releasers {
-		if e := r(); err != nil {
+	for i := len(s.releasers) - 1; i >= 0; i-- {
+		if e := s.releasers[i](); err != nil {
 			err = goerrors.Join(err, e)
 		}
 	}
+
+	for _, sess := range s.allSessions {
+		err = goerrors.Join(err, sess.Close())
+	}
+
 	return err
 }
 

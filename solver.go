@@ -22,7 +22,6 @@ import (
 	"github.com/tonistiigi/fsutil"
 	fstypes "github.com/tonistiigi/fsutil/types"
 	"golang.org/x/exp/maps"
-	"golang.org/x/sync/errgroup"
 )
 
 // Solver provides functions used to create and execute buildkit solve requests.
@@ -278,6 +277,27 @@ func (s *solver) Build(st llb.State, opts ...RequestOption) Request {
 	return r
 }
 
+// aliveConnWaiter allows us to wait until a session is up and running
+// by waiting until the connection has read a message from the server.
+// Upon our first read event we will close the alive channel so that
+// we can continue.  This works around an issue where if you create then
+// immediately close a session (common during tests), then the grpc server may
+// not have been completely setup, so the shutdown will end up waiting for a
+// GOAWAY response that the client will never send. The default goAwayTimeout is
+// 1 second defined in golang.org/x/net/http2/server.go.
+type aliveConnWaiter struct {
+	net.Conn
+	aliveOnce sync.Once
+	alive     chan struct{}
+}
+
+func (cw *aliveConnWaiter) Read(b []byte) (n int, err error) {
+	defer cw.aliveOnce.Do(func() {
+		close(cw.alive)
+	})
+	return cw.Conn.Read(b)
+}
+
 func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error) {
 	if s.err != nil {
 		return nil, errors.Wrap(s.err, "solver in error state, cannot proceed")
@@ -347,28 +367,31 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		allSessions[attach] = bkSess
 	}
 
-	resolver := newResolver(ctx, cln, p)
-	releasers = append(releasers, resolver.stop)
-
-	eg, ctx := errgroup.WithContext(ctx)
-	releasers = append(releasers, eg.Wait)
 	waiters := []chan struct{}{}
+
 	for _, bkSess := range allSessions {
 		bkSess := bkSess
-		done := make(chan struct{})
-		waiters = append(waiters, done)
-		eg.Go(func() error {
-			return bkSess.Run(ctx, func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
-				defer close(done)
-				return cln.Dialer()(ctx, proto, meta)
+		alive := make(chan struct{})
+		waiters = append(waiters, alive)
+		go func() {
+			bkSess.Run(ctx, func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
+				conn, err := cln.Dialer()(ctx, proto, meta)
+				return &aliveConnWaiter{Conn: conn, alive: alive}, err
 			})
-		})
+		}()
 	}
 
 	// ensure all sessions are running
 	for _, waiter := range waiters {
-		<-waiter
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-waiter:
+		}
 	}
+
+	resolver := newResolver(ctx, cln, allSessions[nil], p)
+	releasers = append(releasers, resolver.stop)
 
 	localDirs := maps.Clone(s.localDirs)
 	return &session{
