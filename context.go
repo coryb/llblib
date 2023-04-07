@@ -55,23 +55,13 @@ func WithSession(ctx context.Context, s Session) context.Context {
 	return context.WithValue(ctx, sessionKey{}, s)
 }
 
-// LoadSession returns a session stored on the context, or a no-op session.
+// LoadSession returns a session stored on the context, or nil.
 func LoadSession(ctx context.Context) Session {
 	s, ok := ctx.Value(sessionKey{}).(Session)
 	if !ok {
-		return nullSession{}
+		return nil
 	}
 	return s
-}
-
-type nullSession struct{}
-
-func (nullSession) Release() error {
-	return nil
-}
-
-func (nullSession) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
-	return nil, nil
 }
 
 // WithImageResolver returns a context with the provided llb.ImageMetaResovler
