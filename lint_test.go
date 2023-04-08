@@ -27,7 +27,9 @@ func (tw testWriter) Write(p []byte) (n int, err error) {
 
 func TestLint(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// 5m timeout b/c github actions can be slow to pull
+	// the golangci image
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	t.Cleanup(cancel)
 
 	cln, err := llblib.NewClient(ctx, "")
