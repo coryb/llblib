@@ -8,6 +8,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	bksess "github.com/moby/buildkit/session"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
@@ -49,7 +50,7 @@ type resolver struct {
 	cache     map[cacheKey]*cacheValue
 }
 
-func newResolver(ctx context.Context, cln *client.Client, p progress.Progress) *resolver {
+func newResolver(ctx context.Context, cln *client.Client, sess *bksess.Session, p progress.Progress) *resolver {
 	r := &resolver{
 		cache:     map[cacheKey]*cacheValue{},
 		resolveCh: make(chan resolveRequest),
@@ -57,7 +58,12 @@ func newResolver(ctx context.Context, cln *client.Client, p progress.Progress) *
 	}
 
 	go func() {
-		_, err := cln.Build(ctx, client.SolveOpt{}, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		opts := client.SolveOpt{}
+		if sess != nil {
+			opts.SharedSession = sess
+			opts.SessionPreInitialized = true
+		}
+		_, err := cln.Build(ctx, opts, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			for req := range r.resolveCh {
 				req := req
 				go func() {
@@ -73,8 +79,9 @@ func newResolver(ctx context.Context, cln *client.Client, p progress.Progress) *
 		}, p.Channel())
 		if err != nil {
 			r.done <- errors.Wrap(err, "resolver build failed")
+			return
 		}
-		close(r.done)
+		r.done <- nil
 	}()
 	return r
 }
