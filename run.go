@@ -45,11 +45,10 @@ func IncludePatterns(p []string) llb.CopyOption {
 // interfaces.
 type NullOption struct{}
 
-func (NullOption) SetSolverOption(*solver)               {} //nolint:revive
-func (NullOption) SetRequestOption(*Request)             {} //nolint:revive
-func (NullOption) SetFrontendOption(*frontendOptions)    {} //nolint:revive
 func (NullOption) SetConstraintsOption(*llb.Constraints) {} //nolint:revive
 func (NullOption) SetCopyOption(*llb.CopyInfo)           {} //nolint:revive
+func (NullOption) SetDockerfileOption(*DockerfileOpts)   {} //nolint:revive
+func (NullOption) SetFrontendOption(*frontendOptions)    {} //nolint:revive
 func (NullOption) SetGitOption(*llb.GitInfo)             {} //nolint:revive
 func (NullOption) SetHTTPOption(*llb.HTTPInfo)           {} //nolint:revive
 func (NullOption) SetImageOption(*llb.ImageInfo)         {} //nolint:revive
@@ -57,10 +56,12 @@ func (NullOption) SetLocalOption(*llb.LocalInfo)         {} //nolint:revive
 func (NullOption) SetMkdirOption(*llb.MkdirInfo)         {} //nolint:revive
 func (NullOption) SetMkfileOption(*llb.MkfileInfo)       {} //nolint:revive
 func (NullOption) SetOCILayoutOption(*llb.OCILayoutInfo) {} //nolint:revive
+func (NullOption) SetRequestOption(*Request)             {} //nolint:revive
 func (NullOption) SetRmOption(*llb.RmInfo)               {} //nolint:revive
 func (NullOption) SetRunOption(*llb.ExecInfo)            {} //nolint:revive
-func (NullOption) SetSSHOption(*llb.SSHInfo)             {} //nolint:revive
 func (NullOption) SetSecretOption(*llb.SecretInfo)       {} //nolint:revive
+func (NullOption) SetSolverOption(*solver)               {} //nolint:revive
+func (NullOption) SetSSHOption(*llb.SSHInfo)             {} //nolint:revive
 func (NullOption) SetTmpfsOption(*llb.TmpfsInfo)         {} //nolint:revive
 
 // State implements llb.StateOption
