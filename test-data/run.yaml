@@ -1,0 +1,11 @@
+- type: EXEC
+  args: [/bin/true]
+  cwd: /
+  mounts:
+    - mountpoint: /
+      type: BIND
+      output: 0
+      input:
+        type: SOURCE
+        source: docker-image://docker.io/library/golang:1.20.1
+        platform: linux/amd64

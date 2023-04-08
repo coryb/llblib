@@ -1,0 +1,83 @@
+- type: MOUNT
+  input: &ref2
+    type: EXEC
+    args: [/bin/false]
+    env: [FOO=BAZ]
+    cwd: /
+    mounts:
+        - mountpoint: /
+          type: BIND
+          output: 0
+          input:
+            type: EXEC
+            args: [/bin/true]
+            env: [FOO=BAR]
+            cwd: /
+            mounts:
+                - mountpoint: /
+                  type: BIND
+                  output: 0
+                  input:
+                    type: SOURCE
+                    source: docker-image://docker.io/library/golang:1.20.1
+                    platform: linux/amd64
+                - mountpoint: /cache
+                  type: CACHE
+                  cache-id: myid
+                  sharing: PRIVATE
+                - mountpoint: /git
+                  type: BIND
+                  readonly: true
+                  input: &ref0_0
+                    type: SOURCE
+                    source: git://github.com/moby/buildkit.git#baaf67ba976460a51ef198abab88baae376c32d8
+                    attrs: {git.authheadersecret: GIT_AUTH_HEADER, git.authtokensecret: GIT_AUTH_TOKEN, git.fullurl: 'https://github.com/moby/buildkit.git', git.keepgitdir: "true"}
+                - &ref1_1
+                  mountpoint: /scratch
+                  type: BIND
+                  output: 1
+                  input: &scratch
+                    type: SOURCE
+                    source: scratch
+                - &ref1_2
+                  mountpoint: /src
+                  type: BIND
+                  output: 2
+                  input:
+                    # caching local://.
+                    type: FILE
+                    actions:
+                        - type: COPY
+                          src: /
+                          dest: /
+                          dest-input: *scratch
+                          src-input:
+                            type: SOURCE
+                            source: local://.
+                            attrs: {local.includepattern: '[".golangci.yaml"]', local.sharedkeyhint: test-constant, local.unique: test-constant}
+                - mountpoint: /tmpfs
+                  type: TMPFS
+        - mountpoint: /cache
+          type: CACHE
+          cache-id: myid
+          sharing: PRIVATE
+        - mountpoint: /git
+          type: BIND
+          readonly: true
+          input: *ref0_0
+        - &ref2_1
+          mountpoint: /scratch
+          type: BIND
+          output: 1
+          input: *ref1_1
+        - &ref2_2
+          mountpoint: /src
+          type: BIND
+          output: 2
+          input: *ref1_2
+        - mountpoint: /tmpfs
+          type: TMPFS
+  output: *ref2_1
+- type: MOUNT
+  input: *ref2
+  output: *ref2_2

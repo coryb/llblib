@@ -52,6 +52,9 @@ func (p nullProgress) Channel(opts ...progress.ChannelOption) chan *client.Solve
 
 // WithSession returns a context with the provided session stored.
 func WithSession(ctx context.Context, s Session) context.Context {
+	if sess, ok := s.(*session); ok {
+		ctx = WithImageResolver(ctx, sess.resolver)
+	}
 	return context.WithValue(ctx, sessionKey{}, s)
 }
 

@@ -1,0 +1,13 @@
+# caching local://.
+- type: FILE
+  actions:
+    - type: COPY
+      src: /
+      dest: /
+      dest-input:
+        type: SOURCE
+        source: scratch
+      src-input:
+        type: SOURCE
+        source: local://.
+        attrs: {local.sharedkeyhint: test-constant, local.unique: test-constant}

@@ -1,0 +1,19 @@
+- type: DIFF
+  lower: &ref0_0
+    type: SOURCE
+    source: docker-image://docker.io/library/golang:1.20.1
+    platform: linux/amd64
+  upper:
+    type: FILE
+    actions:
+        - type: MKFILE
+          path: /foobar/file
+          mode: "0o644"
+          data: contents
+          input:
+            type: FILE
+            actions:
+                - type: MKDIR
+                  path: /foobar
+                  mode: "0o755"
+                  input: *ref0_0

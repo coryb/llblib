@@ -1,0 +1,52 @@
+# [download 2/2] COPY --from=hi hi hi
+- type: FILE
+  actions:
+    - type: COPY
+      src: /hi
+      dest: /hi
+      follow-symlinks: true
+      contents-only: true
+      create-dest-path: true
+      allow-wildcard: true
+      allow-empty-wildcard: true
+      dest-input:
+        # [download 1/2] COPY --from=start start start
+        type: FILE
+        actions:
+            - type: COPY
+              src: /start
+              dest: /start
+              follow-symlinks: true
+              contents-only: true
+              create-dest-path: true
+              allow-wildcard: true
+              allow-empty-wildcard: true
+              dest-input:
+                type: SOURCE
+                source: scratch
+              src-input:
+                # [start 2/2] RUN echo start > start
+                type: EXEC
+                args: [/bin/sh, -c, echo start > start]
+                env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin']
+                cwd: /
+                mounts:
+                    - mountpoint: /
+                      type: BIND
+                      output: 0
+                      input: &ref0_0
+                        # [hi 1/2] FROM docker.io/library/busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16
+                        type: SOURCE
+                        source: docker-image://docker.io/library/busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16
+                        platform: linux/arm64
+      src-input:
+        # [hi 2/2] RUN echo hi > hi
+        type: EXEC
+        args: [/bin/sh, -c, echo hi > hi]
+        env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin']
+        cwd: /
+        mounts:
+            - mountpoint: /
+              type: BIND
+              output: 0
+              input: *ref0_0

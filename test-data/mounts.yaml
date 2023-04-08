@@ -1,0 +1,29 @@
+- type: EXEC
+  args: [/bin/true]
+  env: [FOO=BAR]
+  cwd: /
+  extra-hosts:
+    - host: home
+      ip: 127.0.0.1
+  security-mode: INSECURE
+  mounts:
+    - mountpoint: /
+      type: BIND
+      output: 0
+      input:
+        type: SOURCE
+        source: docker-image://docker.io/library/golang:1.20.1
+        platform: linux/amd64
+    - mountpoint: /git
+      type: BIND
+      readonly: true
+      input:
+        type: SOURCE
+        source: git://github.com/moby/buildkit.git#baaf67ba976460a51ef198abab88baae376c32d8
+        attrs: {git.authheadersecret: GIT_AUTH_HEADER, git.authtokensecret: GIT_AUTH_TOKEN, git.fullurl: 'https://github.com/moby/buildkit.git', git.keepgitdir: "true"}
+    - mountpoint: /scratch
+      type: BIND
+      output: 1
+      input:
+        type: SOURCE
+        source: scratch
