@@ -60,7 +60,7 @@ func TestLint(t *testing.T) {
 		"golangci/golangci-lint:"+GolangCILintVersion,
 		llb.Platform(currentPlatform),
 	).Run(
-		llb.Args([]string{"golangci-lint", "run"}),
+		llb.Args([]string{"golangci-lint", "run", "--timeout", "3m"}),
 		// ensure go mod cache location is in our persistent cache dir
 		llb.AddEnv("GOMODCACHE", "/root/.cache/go-mod"),
 		llb.Dir(cwd),
