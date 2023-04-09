@@ -189,7 +189,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 		}
 		// first get the run opts so we can setup defaults, then we will
 		// re-apply the container options again to the "real" ContainerOptions
-		// latera
+		// later
 		tmp := ContainerOptions{}
 		for _, opt := range opts {
 			opt.SetContainerOptions(&tmp)

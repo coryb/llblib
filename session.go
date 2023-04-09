@@ -119,7 +119,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			}
 			return nil, goerrors.Join(err, moreErr)
 		}
-		return res, nil
+		return res, err
 	}, s.progress.Channel(progress.AddLabel(req.Label)))
 	if err != nil {
 		return nil, errors.Wrap(err, "solve failed")
