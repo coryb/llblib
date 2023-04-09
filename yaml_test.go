@@ -1,7 +1,6 @@
 package llblib_test
 
 import (
-	"context"
 	"net"
 	"os"
 	"path/filepath"
@@ -18,18 +17,7 @@ import (
 
 func TestYAML(t *testing.T) {
 	t.Parallel()
-	slv := llblib.NewSolver()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(cancel)
-
-	cln, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
-	require.NoError(t, err, "creating buildkit client")
-
-	t.Cleanup(func() {
-		if err := cln.Close(); err != nil {
-			t.Errorf("Failed to close client: %s", err)
-		}
-	})
+	r := newTestRunner(t, withTimeout(10*time.Second))
 
 	states := func(s ...llb.State) []llb.State {
 		return s
@@ -42,7 +30,7 @@ func TestYAML(t *testing.T) {
 		states:   states(llb.Scratch()),
 		expected: "scratch",
 	}, {
-		states:   states(slv.Local(".")),
+		states:   states(r.Solver.Local(".")),
 		expected: "local",
 	}, {
 		states:   states(llb.Image("golang:1.20.1", llb.LinuxAmd64)),
@@ -118,7 +106,7 @@ func TestYAML(t *testing.T) {
 					),
 					llb.Readonly,
 				),
-				llb.AddMount("/src", slv.Local(".",
+				llb.AddMount("/src", r.Solver.Local(".",
 					llb.IncludePatterns([]string{".golangci.yaml"}),
 				)),
 			)
@@ -167,15 +155,8 @@ func TestYAML(t *testing.T) {
 		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {
 			t.Parallel()
-			sess, err := slv.NewSession(ctx, cln, llblib.LoadProgress(ctx))
-			require.NoError(t, err, "creating session")
-
-			t.Cleanup(func() {
-				if err := sess.Release(); err != nil {
-					t.Error("Failed to release session")
-				}
-			})
-			ctx = llblib.WithSession(ctx, sess)
+			sess := r.Session(t)
+			ctx := llblib.WithSession(r.Context, sess)
 
 			node, err := llblib.ToYAML(ctx, tt.states...)
 			require.NoError(t, err, "converting state to YAML")
