@@ -6,16 +6,21 @@ import (
 
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
+	"gopkg.in/yaml.v3"
 )
 
 // Session provides a long running session used to solve requests.
 type Session interface {
 	// Do will attempt execute the provided request
 	Do(ctx context.Context, req Request) (*client.SolveResponse, error)
+	// ToYAML will serialize the requests to a yaml sequence to assist in
+	// debugging or visualizing the solve requests.
+	ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, error)
 	// Release will ensure resources are released for the session.
 	Release() error
 }
@@ -49,6 +54,15 @@ func (s *session) Release() error {
 	return err
 }
 
+func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, error) {
+	ctx = WithSession(ctx, s)
+	states := []llb.State{}
+	for _, req := range reqs {
+		states = append(states, req.state)
+	}
+	return ToYAML(ctx, states...)
+}
+
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
 	sess := s.allSessions[req.download]
 
@@ -67,7 +81,6 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 
 	ctx = WithProgress(ctx, s.progress)
 	ctx = WithSession(ctx, s)
-	ctx = WithImageResolver(ctx, s.resolver)
 
 	if req.buildFunc != nil {
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {

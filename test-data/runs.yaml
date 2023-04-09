@@ -1,0 +1,21 @@
+# good build
+- type: EXEC
+  args: [/bin/true]
+  cwd: /
+  mounts:
+    - mountpoint: /
+      type: BIND
+      output: 0
+      input: &ref0_0
+        type: SOURCE
+        source: docker-image://docker.io/library/golang:1.20.1
+        platform: linux/amd64
+# bad build
+- type: EXEC
+  args: [/bin/false]
+  cwd: /
+  mounts:
+    - mountpoint: /
+      type: BIND
+      output: 0
+      input: *ref0_0

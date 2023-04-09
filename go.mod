@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/containerd/console v1.0.3
+	github.com/coryb/walky v0.0.0-20221229175356-f7b4e8f780fb
 	github.com/docker/docker v23.0.0-rc.1+incompatible
 	github.com/moby/buildkit v0.11.5
 	github.com/opencontainers/go-digest v1.0.0
@@ -18,6 +19,7 @@ require (
 	golang.org/x/sys v0.3.0
 	golang.org/x/term v0.3.0
 	google.golang.org/grpc v1.50.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -63,5 +65,4 @@ require (
 	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/genproto v0.0.0-20220706185917-7780775163c4 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

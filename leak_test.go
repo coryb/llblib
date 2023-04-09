@@ -11,5 +11,10 @@ func TestMain(m *testing.M) {
 		// there is a 3s sleep in (*Client).solve to ensure the sessions are
 		// closed on errors, even if using SharedSession
 		goleak.IgnoreTopFunction("github.com/moby/buildkit/client.(*Client).solve.func2.1.1"),
+
+		// HTTP keepalive
+		goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+		goleak.IgnoreTopFunction("net/http.(*persistConn).readLoop"),
+		goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
 	)
 }
