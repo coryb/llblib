@@ -163,6 +163,29 @@ func TestYAML(t *testing.T) {
 			}),
 		)),
 		expected: "dockerfile",
+	}, {
+		states: states(
+			llb.Image("busybox", llb.LinuxAmd64).Run(
+				llb.Shlex("cat /secret"),
+				slv.AddSecretFile("yaml_test.go", "/secret"),
+			).Root(),
+		),
+		expected: "secrets",
+	}, {
+		states: states(
+			llb.Image("busybox", llb.LinuxAmd64).Run(
+				llb.Args([]string{"/bin/sh", "-c", "echo multi\necho line\necho statement"}),
+			).Root(),
+		),
+		expected: "script",
+	}, {
+		states: states(
+			llb.Image("busybox", llb.LinuxAmd64).Run(
+				llb.Args([]string{"cat", "/tmp/unix.sock"}),
+				slv.Forward("unix://./unix.sock", "/tmp/unix.sock"),
+			).Root(),
+		),
+		expected: "forward",
 	}} {
 		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {
@@ -180,15 +203,12 @@ func TestYAML(t *testing.T) {
 			node, err := llblib.ToYAML(ctx, tt.states...)
 			require.NoError(t, err, "converting state to YAML")
 
-			walky.Walk(node, walky.StringWalker("local.sharedkeyhint", func(n *yaml.Node) error {
-				n.Value = "test-constant"
-				return nil
-			}))
-
-			walky.Walk(node, walky.StringWalker("local.unique", func(n *yaml.Node) error {
-				n.Value = "test-constant"
-				return nil
-			}))
+			for _, key := range []string{"local.sharedkeyhint", "local.unique", "secret"} {
+				walky.Walk(node, walky.StringWalker(key, func(n *yaml.Node) error {
+					n.Value = "test-constant"
+					return nil
+				}))
+			}
 
 			got, err := yaml.Marshal(node)
 			require.NoError(t, err, "marshalling YAML")

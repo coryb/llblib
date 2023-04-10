@@ -1,0 +1,17 @@
+- type: EXEC
+  args:
+    - /bin/sh
+    - -c
+    - |-
+      echo multi
+      echo line
+      echo statement
+  cwd: /
+  mounts:
+    - mountpoint: /
+      type: BIND
+      output: 0
+      input:
+        type: SOURCE
+        source: docker-image://docker.io/library/busybox:latest
+        platform: linux/amd64
