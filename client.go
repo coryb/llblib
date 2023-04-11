@@ -16,8 +16,6 @@ import (
 	_ "github.com/moby/buildkit/client/connhelper/kubepod"
 )
 
-type grpcError interface{ GRPCStatus() *status.Status }
-
 // NewClient will return a new buildkit client.  It will verify the client
 // connection by calling the client.Info function when available, otherwise will
 // call client.ListWorkers.  If the provided addr is empty, we attempt to use
@@ -36,12 +34,10 @@ func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 	}
 
 	if _, err := cln.Info(ctx); err != nil {
-		// Info is not implemented on older buildkit servers shipped
-		// with docker.
-		var grpcErr grpcError
-		if !errors.As(err, &grpcErr) || grpcErr.GRPCStatus().Code() != codes.Unimplemented {
+		// Info API added in v0.11
+		if !ErrUnimplemented(err) {
 			cln.Close()
-			return nil, errors.Wrapf(err, "unable to connect to buildkitd [code: %d]", grpcErr.GRPCStatus().Code())
+			return nil, errors.Wrapf(err, "unable to connect to buildkitd")
 		}
 	} else {
 		return cln, nil
@@ -54,6 +50,18 @@ func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 		return nil, errors.Wrap(err, "unable to connect to buildkitd")
 	}
 	return cln, nil
+}
+
+type grpcError interface{ GRPCStatus() *status.Status }
+
+// ErrUnimplemented will return true if the provided error is a GRPC error
+// and the GRPC status code matches `codes.Unimplemented`.
+func ErrUnimplemented(err error) bool {
+	var grpcErr grpcError
+	if errors.As(err, &grpcErr) && grpcErr.GRPCStatus().Code() == codes.Unimplemented {
+		return true
+	}
+	return false
 }
 
 func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
