@@ -155,7 +155,7 @@ func TestYAML(t *testing.T) {
 		states: states(
 			llb.Image("busybox", llb.LinuxAmd64).Run(
 				llb.Shlex("cat /secret"),
-				slv.AddSecretFile("yaml_test.go", "/secret"),
+				r.Solver.AddSecretFile("yaml_test.go", "/secret"),
 			).Root(),
 		),
 		expected: "secrets",
@@ -170,7 +170,7 @@ func TestYAML(t *testing.T) {
 		states: states(
 			llb.Image("busybox", llb.LinuxAmd64).Run(
 				llb.Args([]string{"cat", "/tmp/unix.sock"}),
-				slv.Forward("unix://./unix.sock", "/tmp/unix.sock"),
+				r.Solver.Forward("unix://./unix.sock", "/tmp/unix.sock"),
 			).Root(),
 		),
 		expected: "forward",
