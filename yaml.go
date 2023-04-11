@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coryb/walky"
@@ -359,7 +360,16 @@ func (g graphState) visit(input *pb.Input) (node *yaml.Node, err error) {
 func (g graphState) yamlExecOp(op *pb.Op, e *pb.ExecOp) (*yaml.Node, error) {
 	node := walky.NewMappingNode()
 	yamlAddKV(node, "type", "EXEC")
-	yamlAddSeq(node, "args", e.Meta.Args, flowStyle)
+
+	opts := []yamlOpt{flowStyle}
+	// only use flowStyle if the args dont have multi-line statements
+	for _, arg := range e.Meta.Args {
+		if strings.Contains(arg, "\n") {
+			opts = []yamlOpt{}
+			break
+		}
+	}
+	yamlAddSeq(node, "args", e.Meta.Args, opts...)
 	yamlAddSeq(node, "env", e.Meta.Env, flowStyle)
 	yamlAddKV(node, "cwd", e.Meta.Cwd)
 	yamlAddKV(node, "user", e.Meta.User)
@@ -371,7 +381,7 @@ func (g graphState) yamlExecOp(op *pb.Op, e *pb.ExecOp) (*yaml.Node, error) {
 			extraHosts)
 		for _, host := range e.Meta.ExtraHosts {
 			n := walky.NewMappingNode()
-			n.Style = yaml.FoldedStyle
+			n.Style = yaml.FlowStyle
 			yamlMapAdd(n,
 				walky.NewStringNode("host"),
 				walky.NewStringNode(host.Host),
@@ -417,7 +427,10 @@ func (g graphState) yamlMount(op *pb.Op, m *pb.Mount) (*yaml.Node, error) {
 	mount := walky.NewMappingNode()
 	yamlAddKV(mount, "mountpoint", m.Dest)
 	yamlAddKV(mount, "type", m.MountType)
-	yamlAddInt(mount, "output", int64(m.Output))
+	if m.MountType == pb.MountType_BIND && !m.Readonly {
+		// CACHE, SECRET, SSH, TMPFS mounts dont have outputs
+		yamlAddInt(mount, "output", int64(m.Output))
+	}
 	yamlAddBool(mount, "readonly", m.Readonly)
 	yamlAddKV(mount, "source-path", m.Selector)
 	if m.CacheOpt != nil {
@@ -426,24 +439,32 @@ func (g graphState) yamlMount(op *pb.Op, m *pb.Mount) (*yaml.Node, error) {
 	}
 	if m.SecretOpt != nil {
 		yamlAddKV(mount, "secret", m.SecretOpt.ID)
-		yamlAddInt(mount, "uid", int64(m.SecretOpt.Uid))
-		yamlAddInt(mount, "gid", int64(m.SecretOpt.Gid))
+		if m.SecretOpt.Uid != 0 {
+			yamlAddInt(mount, "uid", int64(m.SecretOpt.Uid))
+		}
+		if m.SecretOpt.Gid != 0 {
+			yamlAddInt(mount, "gid", int64(m.SecretOpt.Gid))
+		}
 		yamlAddMode(mount, int32(m.SecretOpt.Mode))
 	}
 	if m.SSHOpt != nil {
 		yamlAddKV(mount, "ssh", m.SSHOpt.ID)
-		yamlAddKV(mount, "secret", m.SSHOpt.ID)
-		yamlAddInt(mount, "uid", int64(m.SSHOpt.Uid))
-		yamlAddInt(mount, "gid", int64(m.SSHOpt.Gid))
+		if m.SSHOpt.Uid != 0 {
+			yamlAddInt(mount, "uid", int64(m.SSHOpt.Uid))
+		}
+		if m.SSHOpt.Gid != 0 {
+			yamlAddInt(mount, "gid", int64(m.SSHOpt.Gid))
+		}
 		yamlAddMode(mount, int32(m.SSHOpt.Mode))
 	}
 
+	if m.MountType != pb.MountType_BIND {
+		// CACHE, SECRET, SSH TMPFS mounts dont have inputs, return now.
+		return mount, nil
+	}
+
 	if m.Input < 0 {
-		// scratch mount or tmpfs/cache, don't print empty inputs for
-		// tmpfs/cache, it is implied
-		if m.CacheOpt == nil && m.TmpfsOpt == nil {
-			yamlMapAdd(mount, walky.NewStringNode("input"), g.scratchNode())
-		}
+		yamlMapAdd(mount, walky.NewStringNode("input"), g.scratchNode())
 		return mount, nil
 	}
 	if int(m.Input) >= len(op.Inputs) {

@@ -1,0 +1,16 @@
+- type: EXEC
+  args: [cat, /tmp/unix.sock]
+  env: [SSH_AUTH_SOCK=/tmp/unix.sock]
+  cwd: /
+  mounts:
+    - mountpoint: /
+      type: BIND
+      output: 0
+      input:
+        type: SOURCE
+        source: docker-image://docker.io/library/busybox:latest
+        platform: linux/amd64
+    - mountpoint: /tmp/unix.sock
+      type: SSH
+      ssh: sha256:1be2e4bbd95ae9923ecbc938c27258dd34270988a892f721811283b541016b2b
+      mode: "0o600"

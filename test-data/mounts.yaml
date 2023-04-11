@@ -3,8 +3,7 @@
   env: [FOO=BAR]
   cwd: /
   extra-hosts:
-    - host: home
-      ip: 127.0.0.1
+    - {host: home, ip: 127.0.0.1}
   security-mode: INSECURE
   mounts:
     - mountpoint: /
