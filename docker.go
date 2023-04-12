@@ -2,9 +2,12 @@ package llblib
 
 import (
 	"context"
+	"path"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/builder"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
+	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/solver/pb"
 	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -63,10 +66,61 @@ func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOpt
 		for _, opt := range opts {
 			opt.SetDockerfileOption(&docOpts)
 		}
-		state, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, docOpts)
-		if err != nil {
-			return llb.Scratch(), err
+		if source, _, _, ok := parser.DetectSyntax(dockerfile); ok {
+			return syntaxSourceSolve(source, dockerfile, docOpts)
 		}
-		return *state, nil
+		return directSolve(ctx, dockerfile, docOpts)
 	})
+}
+
+func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (llb.State, error) {
+	state, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	return *state, nil
+}
+
+const (
+	// copying private const variables from:
+	// github.com/moby/buildkit/frontend/dockerfile/builder
+	keyTarget             = "target"
+	keyTargetPlatform     = "platform"
+	buildArgPrefix        = "build-arg:"
+	defaultDockerfileName = "Dockerfile"
+)
+
+func syntaxSourceSolve(
+	source string,
+	dockerfile []byte,
+	opts DockerfileOpts,
+) (llb.State, error) {
+	feOpts := []FrontendOption{
+		FrontendInput(builder.DefaultLocalNameDockerfile, llb.Scratch().File(
+			llb.Mkfile(defaultDockerfileName, 0o644, dockerfile),
+		)),
+	}
+	if opts.BuildContext != nil {
+		feOpts = append(feOpts, FrontendInput(builder.DefaultLocalNameContext, *opts.BuildContext))
+	}
+
+	if opts.TargetPlatform != nil {
+		feOpts = append(feOpts, FrontendOpt(keyTargetPlatform,
+			path.Join(
+				opts.TargetPlatform.OS,
+				opts.TargetPlatform.Architecture,
+				opts.TargetPlatform.Variant,
+			),
+		))
+	}
+
+	if opts.Target != "" {
+		feOpts = append(feOpts, FrontendOpt(keyTarget, opts.Target))
+	}
+
+	for k, v := range opts.BuildArgs {
+		feOpts = append(feOpts, FrontendOpt(buildArgPrefix+k, v))
+	}
+
+	return Frontend(source, feOpts...), nil
 }

@@ -1,9 +1,9 @@
 package llblib_test
 
 import (
+	"bytes"
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -11,15 +11,6 @@ import (
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
 )
-
-type testWriter struct {
-	t *testing.T
-}
-
-func (tw testWriter) Write(p []byte) (n int, err error) {
-	tw.t.Log(strings.TrimSpace(string(p)))
-	return len(p), nil
-}
 
 type runnerOpts struct {
 	timeout time.Duration
@@ -62,9 +53,12 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 		cln.Close()
 	})
 
-	prog := progress.NewProgress(progress.WithOutput(&testWriter{t}))
+	var buf bytes.Buffer
+	prog := progress.NewProgress(progress.WithOutput(&buf))
 	t.Cleanup(func() {
 		prog.Close()
+		t.Helper()
+		t.Logf("build output:\n%s", buf.String())
 	})
 
 	return testRunner{
