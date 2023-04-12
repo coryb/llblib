@@ -108,7 +108,12 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 					if err != nil {
 						return nil, err
 					}
-					inputs[name] = def.ToPB()
+					// only add inputs that are non-nil (ie dont add scratch)
+					// because otherwise we will get a solve error:
+					// cannot marshal empty definition op
+					if def.Def != nil {
+						inputs[name] = def.ToPB()
+					}
 				}
 				req := gateway.SolveRequest{
 					Frontend:       "gateway.v0",
