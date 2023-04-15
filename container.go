@@ -274,8 +274,9 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 	eg.Go(func() error {
 		<-ctx.Done() // context cancelled when container exits
 		var err error
-		for _, f := range co.Teardown {
-			if tearErr := f(); err != nil {
+		// Teardown in LIFO order like defer
+		for i := len(co.Teardown) - 1; i >= 0; i-- {
+			if tearErr := co.Teardown[i](); err != nil {
 				err = goerrors.Join(err, tearErr)
 			}
 		}
