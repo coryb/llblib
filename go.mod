@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/containerd/console v1.0.3
 	github.com/coryb/walky v0.0.0-20221229175356-f7b4e8f780fb
+	github.com/docker/cli v23.0.0-rc.1+incompatible
 	github.com/docker/docker v23.0.0-rc.1+incompatible
 	github.com/moby/buildkit v0.11.5
 	github.com/opencontainers/go-digest v1.0.0
@@ -35,8 +36,8 @@ require (
 	github.com/containerd/ttrpc v1.1.0 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/docker/cli v23.0.0-rc.1+incompatible // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.2 // indirect
