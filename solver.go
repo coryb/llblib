@@ -10,10 +10,12 @@ import (
 
 	"github.com/coryb/llblib/progress"
 	"github.com/coryb/llblib/sockproxy"
+	"github.com/docker/cli/cli/config"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/filesync"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/entitlements"
@@ -348,6 +350,10 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		}
 		attachables = append(attachables, sp)
 	}
+
+	// By default, forward docker authentication through the session.
+	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	attachables = append(attachables, authprovider.NewDockerAuthProvider(dockerConfig))
 
 	// for each download we need a uniq session.  This is a hack, there has been
 	// some discussion for buildkit to have a session manager available to the
