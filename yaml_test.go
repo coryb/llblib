@@ -134,14 +134,14 @@ func TestYAML(t *testing.T) {
 	}, {
 		states: states(llblib.Dockerfile(
 			[]byte(`
-				FROM busybox AS start
+				FROM busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16 AS start
 				RUN echo start > start
-				FROM busybox AS hi
+				FROM busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16 AS hi
 				RUN echo hi > hi
 				FROM scratch AS download
 				COPY --from=start start start
 				COPY --from=hi hi hi
-				FROM busybox
+				FROM busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16
 				RUN false # <- should not run
 			`),
 			llb.Scratch(),
