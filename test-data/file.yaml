@@ -1,0 +1,39 @@
+- type: FILE
+  actions:
+    - &ref0_1
+      type: MKDIR
+      path: /foo
+      mode: "0o755"
+      input: &scratch
+        type: SOURCE
+        source: scratch
+    - &ref0_2
+      type: MKFILE
+      path: /foo/bar
+      mode: "0o644"
+      data: bar content
+      input: *ref0_1
+    - &ref0_3
+      type: MKFILE
+      path: /foo/bad
+      mode: "0o644"
+      data: bad content
+      input: *ref0_2
+    - &ref0_4
+      type: COPY
+      src: /
+      dest: /foo
+      dest-input: *ref0_3
+      src-input:
+        type: FILE
+        actions:
+            - type: MKFILE
+              path: /baz
+              mode: "0o644"
+              data: baz content
+              input: *scratch
+    - type: RM
+      path: /foo/bad
+      allow-not-found: "false"
+      allow-wildcard: "false"
+      input: *ref0_4
