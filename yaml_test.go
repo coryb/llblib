@@ -40,9 +40,7 @@ func TestYAML(t *testing.T) {
 			llb.Diff(
 				llb.Image("golang:1.20.1", llb.LinuxAmd64),
 				llb.Image("golang:1.20.1", llb.LinuxAmd64).File(
-					llb.Mkdir("/foobar", 0o755),
-				).File(
-					llb.Mkfile("/foobar/file", 0o644, []byte("contents")),
+					llb.Mkdir("/foobar", 0o755).Mkfile("/foobar/file", 0o644, []byte("contents")),
 				),
 			),
 		),
@@ -174,6 +172,23 @@ func TestYAML(t *testing.T) {
 			).Root(),
 		),
 		expected: "forward",
+	}, {
+		states: states(
+			llb.Scratch().File(
+				llb.Mkdir(
+					"foo", 0o755,
+				).Mkfile(
+					"foo/bar", 0o644, []byte("bar content"),
+				).Mkfile(
+					"foo/bad", 0o644, []byte("bad content"),
+				).Copy(
+					llb.Scratch().File(llb.Mkfile("baz", 0o644, []byte("baz content"))), "/", "foo",
+				).Rm(
+					"foo/bad",
+				),
+			),
+		),
+		expected: "file",
 	}} {
 		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {

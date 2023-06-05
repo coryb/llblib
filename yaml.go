@@ -345,7 +345,7 @@ func (g graphState) visit(input *pb.Input) (node *yaml.Node, err error) {
 		}
 		return node, err
 	case *pb.Op_File:
-		return g.yamlFileOp(op, v.File)
+		return g.yamlFileOp(input.Digest, op, v.File)
 	case *pb.Op_Build:
 		return g.yamlBuildOp(op, v.Build)
 	case *pb.Op_Merge:
@@ -487,12 +487,13 @@ func (g graphState) yamlSourceOp(s *pb.SourceOp) *yaml.Node {
 	return node
 }
 
-func (g graphState) yamlFileOp(op *pb.Op, f *pb.FileOp) (*yaml.Node, error) {
+func (g graphState) yamlFileOp(dgst digest.Digest, op *pb.Op, f *pb.FileOp) (*yaml.Node, error) {
 	node := walky.NewMappingNode()
 	yamlAddKV(node, "type", "FILE")
 	actions := walky.NewSequenceNode()
 	yamlMapAdd(node, walky.NewStringNode("actions"), actions)
-	for _, act := range f.Actions {
+	inputs := []*yaml.Node{}
+	for i, act := range f.Actions {
 		var action *yaml.Node
 		var err error
 		switch a := act.Action.(type) {
@@ -515,13 +516,18 @@ func (g graphState) yamlFileOp(op *pb.Op, f *pb.FileOp) (*yaml.Node, error) {
 			// for copy we use src-input and dest-input
 			inputName = "dest-input"
 		}
-		if act.Input == -1 {
+		switch {
+		case act.Input == -1:
 			yamlMapAdd(action, walky.NewStringNode(inputName), g.scratchNode())
-		} else {
+		case int(act.Input) < len(op.Inputs):
 			input, err := g.visit(op.Inputs[act.Input])
 			if err != nil {
 				return nil, errors.Wrap(err, "visiting copy input")
 			}
+			yamlMapAdd(action, walky.NewStringNode(inputName), input)
+		default:
+			prevAction := inputs[int(act.Input)-len(op.Inputs)]
+			input := yamlAliasOf(prevAction, g.anchorName(dgst)+"_"+strconv.Itoa(i))
 			yamlMapAdd(action, walky.NewStringNode(inputName), input)
 		}
 		if act.SecondaryInput >= 0 {
@@ -532,6 +538,7 @@ func (g graphState) yamlFileOp(op *pb.Op, f *pb.FileOp) (*yaml.Node, error) {
 			yamlMapAdd(action, walky.NewStringNode("src-input"), input)
 		}
 		walky.AppendNode(actions, action)
+		inputs = append(inputs, action)
 	}
 	return node, nil
 }
