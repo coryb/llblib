@@ -2,11 +2,14 @@ package llblib
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/coryb/llblib/progress"
 	"github.com/coryb/llblib/sockproxy"
@@ -168,7 +171,10 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 }
 
 func localID(absPath string, opts ...llb.LocalOption) (string, error) {
-	uniqID := localUniqueID(absPath)
+	uniqID, err := localUniqueID(absPath, opts...)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to calculate ID for local")
+	}
 	opts = append(opts, llb.LocalUniqueID(uniqID))
 	st := llb.Local("", opts...)
 
@@ -184,9 +190,57 @@ func localID(absPath string, opts ...llb.LocalOption) (string, error) {
 	return digest.FromBytes(def.Def[len(def.Def)-1]).String(), nil
 }
 
-func localUniqueID(absPath string) string {
+// localUniqueID returns a consistent string that is unique per host + dir +
+// last modified time.
+//
+// If there is already a solve in progress using the same local dir, we want to
+// deduplicate the "local" if the directory hasn't changed, but if there has
+// been a change, we must not identify the "local" as a duplicate. Thus, we
+// incorporate the last modified timestamp into the result.
+func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 	mac := firstUpInterface()
-	return fmt.Sprintf("cwd:%s,mac:%s", absPath, mac)
+
+	fi, err := os.Stat(localPath)
+	if err != nil {
+		return "", err
+	}
+
+	lastModified := fi.ModTime()
+	if fi.IsDir() {
+		var localInfo llb.LocalInfo
+		for _, opt := range opts {
+			opt.SetLocalOption(&localInfo)
+		}
+
+		var walkOpts fsutil.WalkOpt
+		if localInfo.IncludePatterns != "" {
+			if err := json.Unmarshal([]byte(localInfo.IncludePatterns), &walkOpts.IncludePatterns); err != nil {
+				return "", errors.Wrap(err, "failed to unmarshal IncludePatterns for localUniqueID")
+			}
+		}
+		if localInfo.ExcludePatterns != "" {
+			if err := json.Unmarshal([]byte(localInfo.ExcludePatterns), &walkOpts.ExcludePatterns); err != nil {
+				return "", errors.Wrap(err, "failed to unmarshal ExcludePatterns for localUniqueID")
+			}
+		}
+		if localInfo.FollowPaths != "" {
+			if err := json.Unmarshal([]byte(localInfo.FollowPaths), &walkOpts.FollowPaths); err != nil {
+				return "", errors.Wrap(err, "failed to unmarshal FollowPaths for localUniqueID")
+			}
+		}
+
+		err := fsutil.Walk(context.Background(), localPath, &walkOpts, func(path string, info fs.FileInfo, err error) error {
+			if info.ModTime().After(lastModified) {
+				lastModified = info.ModTime()
+			}
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return fmt.Sprintf("path:%s,mac:%s,modified:%s", localPath, mac, lastModified.Format(time.RFC3339Nano)), nil
 }
 
 // firstUpInterface returns the mac address for the first "UP" network
