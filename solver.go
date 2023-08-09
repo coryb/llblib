@@ -54,6 +54,11 @@ type Solver interface {
 	// buildkit.  Note that `Release` MUST be called on the returned `Session`
 	// to free resources.
 	NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error)
+
+	// ImageResolver returns an llb.ImageMetaResolver to resolve images.  The
+	// resolver will use a common cache for all image lookups done via this
+	// solver.
+	ImageResolver(cln *client.Client, p progress.Progress) llb.ImageMetaResolver
 }
 
 // SolverOption can be used to modify how solve requests are generated.
@@ -83,6 +88,9 @@ func NewSolver(opts ...SolverOption) Solver {
 		localDirs:    map[string]string{},
 		secrets:      map[string]secretsprovider.Source{},
 		agentConfigs: map[string]sockproxy.AgentConfig{},
+		resolverCache: &resolveImageCache{
+			cache: map[resolveImageCacheKey]*resolveImageCacheValue{},
+		},
 	}
 	for _, o := range opts {
 		o.SetSolverOption(&s)
@@ -107,14 +115,15 @@ type Request struct {
 }
 
 type solver struct {
-	cwd          string
-	err          error
-	mu           sync.Mutex
-	localDirs    map[string]string
-	secrets      map[string]secretsprovider.Source
-	downloads    []bksess.Attachable
-	helpers      []func(ctx context.Context) (release func() error, err error)
-	agentConfigs map[string]sockproxy.AgentConfig
+	cwd           string
+	err           error
+	mu            sync.Mutex
+	localDirs     map[string]string
+	secrets       map[string]secretsprovider.Source
+	downloads     []bksess.Attachable
+	helpers       []func(ctx context.Context) (release func() error, err error)
+	agentConfigs  map[string]sockproxy.AgentConfig
+	resolverCache *resolveImageCache
 }
 
 var _ Solver = (*solver)(nil)
@@ -450,8 +459,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		}
 	}
 
-	resolver := newResolver(ctx, cln, allSessions[nil], p)
-	releasers = append(releasers, resolver.stop)
+	resolver := newResolver(cln, s.resolverCache, allSessions[nil], p)
 
 	localDirs := maps.Clone(s.localDirs)
 	return &session{
@@ -463,4 +471,8 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		resolver:    resolver,
 		progress:    p,
 	}, nil
+}
+
+func (s *solver) ImageResolver(cln *client.Client, p progress.Progress) llb.ImageMetaResolver {
+	return newResolver(cln, s.resolverCache, nil, p)
 }

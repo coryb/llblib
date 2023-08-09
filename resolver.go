@@ -10,22 +10,48 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
 	"github.com/opencontainers/go-digest"
-	"github.com/pkg/errors"
 )
 
-type resolveResponse struct {
-	digest digest.Digest
-	config []byte
-	err    error
+type resolver struct {
+	cache *resolveImageCache
+	cln   *client.Client
+	sess  *bksess.Session
+	prog  progress.Progress
 }
 
-type resolveRequest struct {
-	ref      string
-	opt      llb.ResolveImageConfigOpt
-	response chan<- resolveResponse
+func newResolver(cln *client.Client, cache *resolveImageCache, sess *bksess.Session, p progress.Progress) *resolver {
+	return &resolver{
+		cache: cache,
+		cln:   cln,
+		sess:  sess,
+		prog:  p,
+	}
 }
 
-type cacheKey struct {
+func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
+	return r.cache.lookup(ctx, ref, opt, func() (digest.Digest, []byte, error) {
+		opts := client.SolveOpt{}
+		if r.sess != nil {
+			opts.SharedSession = r.sess
+			opts.SessionPreInitialized = true
+		}
+		var (
+			d      digest.Digest
+			config []byte
+			err    error
+		)
+		_, buildErr := r.cln.Build(ctx, opts, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+			d, config, err = c.ResolveImageConfig(ctx, ref, opt)
+			return nil, nil
+		}, r.prog.Channel())
+		if buildErr != nil {
+			return "", nil, buildErr
+		}
+		return d, config, err
+	})
+}
+
+type resolveImageCacheKey struct {
 	resolveType llb.ResolverType
 	ref         string
 	os          string
@@ -35,69 +61,25 @@ type cacheKey struct {
 	store       llb.ResolveImageConfigOptStore
 }
 
-type cacheValue struct {
+type resolveImageCacheValue struct {
 	digest   digest.Digest
 	config   []byte
 	err      error
 	inflight chan struct{}
 }
 
-type resolver struct {
-	resolveCh chan resolveRequest
-	done      chan error
-	mu        sync.Mutex
-	cacheMu   sync.RWMutex
-	cache     map[cacheKey]*cacheValue
+type resolveImageCache struct {
+	mu    sync.Mutex
+	cache map[resolveImageCacheKey]*resolveImageCacheValue
 }
 
-func newResolver(ctx context.Context, cln *client.Client, sess *bksess.Session, p progress.Progress) *resolver {
-	r := &resolver{
-		cache:     map[cacheKey]*cacheValue{},
-		resolveCh: make(chan resolveRequest),
-		done:      make(chan error),
-	}
-
-	go func() {
-		opts := client.SolveOpt{}
-		if sess != nil {
-			opts.SharedSession = sess
-			opts.SessionPreInitialized = true
-		}
-		_, err := cln.Build(ctx, opts, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			for req := range r.resolveCh {
-				req := req
-				go func() {
-					digest, config, err := c.ResolveImageConfig(ctx, req.ref, req.opt)
-					select {
-					case <-ctx.Done():
-						close(req.response)
-					case req.response <- resolveResponse{digest: digest, config: config, err: err}:
-					}
-				}()
-			}
-			return nil, nil
-		}, p.Channel())
-		if err != nil {
-			r.done <- errors.Wrap(err, "resolver build failed")
-			return
-		}
-		r.done <- nil
-	}()
-	return r
-}
-
-func (r *resolver) stop() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	close(r.resolveCh)
-	err := <-r.done
-	r.resolveCh = nil
-	r.done = nil
-	return err
-}
-
-func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
-	key := cacheKey{
+func (r *resolveImageCache) lookup(
+	ctx context.Context,
+	ref string,
+	opt llb.ResolveImageConfigOpt,
+	resolver func() (digest.Digest, []byte, error),
+) (digest.Digest, []byte, error) {
+	key := resolveImageCacheKey{
 		resolveType: opt.ResolverType,
 		ref:         ref,
 		mode:        opt.ResolveMode,
@@ -108,67 +90,35 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.R
 		key.arch = opt.Platform.Architecture
 		key.variant = opt.Platform.Variant
 	}
-	r.cacheMu.RLock()
-	val, ok := r.cache[key]
-	r.cacheMu.RUnlock()
-	if ok {
-		select {
-		case <-ctx.Done():
-			return "", nil, ctx.Err()
-		case <-val.inflight:
-			return val.digest, val.config, val.err
-		}
-	}
 
-	r.cacheMu.Lock()
-	// double check now that we have the write lock that someone
-	// didnt beat us to it
-	waiting := false
-	val, ok = r.cache[key]
-	if ok {
-		// someone beat us, we should wait
-		waiting = true
-	} else {
-		val = &cacheValue{
+	r.mu.Lock()
+	val, ok := r.cache[key]
+	if !ok {
+		val = &resolveImageCacheValue{
 			inflight: make(chan struct{}),
 		}
 		r.cache[key] = val
 	}
-	r.cacheMu.Unlock()
-	if waiting {
-		select {
-		case <-ctx.Done():
-			return "", nil, ctx.Err()
-		case <-val.inflight:
-			return val.digest, val.config, val.err
-		}
-	}
-
-	respCh := make(chan resolveResponse)
-	req := resolveRequest{
-		ref:      ref,
-		opt:      opt,
-		response: respCh,
-	}
-	r.mu.Lock()
-	if r.resolveCh == nil {
-		r.mu.Unlock()
-		return "", nil, errors.New("resolver not running")
-	}
-	r.resolveCh <- req
 	r.mu.Unlock()
+	if ok {
+		return val.fetch(ctx)
+	}
+	val.store(resolver())
+	return val.fetch(ctx)
+}
 
+func (v *resolveImageCacheValue) fetch(ctx context.Context) (digest.Digest, []byte, error) {
 	select {
 	case <-ctx.Done():
 		return "", nil, ctx.Err()
-	case resp, ok := <-respCh:
-		if !ok {
-			return "", nil, errors.New("resolver did not respond")
-		}
-		val.digest = resp.digest
-		val.config = resp.config
-		val.err = resp.err
-		close(val.inflight)
-		return resp.digest, resp.config, resp.err
+	case <-v.inflight:
+		return v.digest, v.config, v.err
 	}
+}
+
+func (v *resolveImageCacheValue) store(d digest.Digest, config []byte, err error) {
+	v.digest = d
+	v.config = config
+	v.err = err
+	close(v.inflight)
 }
