@@ -6,7 +6,7 @@ require (
 	github.com/containerd/console v1.0.3
 	github.com/coryb/walky v0.0.0-20221229175356-f7b4e8f780fb
 	github.com/docker/cli v23.0.0-rc.1+incompatible
-	github.com/docker/docker v23.0.0-rc.1+incompatible
+	github.com/docker/docker v24.0.5+incompatible
 	github.com/moby/buildkit v0.11.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20220303224323-02efb9a75ee1

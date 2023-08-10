@@ -2,6 +2,7 @@ package llblib
 
 import (
 	"context"
+	"os"
 
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
@@ -12,6 +13,7 @@ type (
 	progressKey      struct{}
 	sessionKey       struct{}
 	imageResolverKey struct{}
+	envKey           string
 )
 
 // WithProgress returns a context with the provided Progress stored.
@@ -81,4 +83,25 @@ func LoadImageResolver(ctx context.Context) llb.ImageMetaResolver {
 		return nil
 	}
 	return r
+}
+
+// WithEnv is used to set env vars on a context.
+func WithEnv(ctx context.Context, key, value string) context.Context {
+	return context.WithValue(ctx, envKey(key), value)
+}
+
+// LookupEnv will fetch a env var stored on the context or default to calling
+// os.LookupEnv
+func LookupEnv(ctx context.Context, key string) (value string, ok bool) {
+	if val, ok := ctx.Value(envKey(key)).(string); ok {
+		return val, ok
+	}
+	return os.LookupEnv(key)
+}
+
+// Getenv will fetch an env var stored on the context or default to calling
+// os.Getenv
+func Getenv(ctx context.Context, key string) (value string) {
+	val, _ := LookupEnv(ctx, key)
+	return val
 }

@@ -2,7 +2,12 @@ package llblib
 
 import (
 	"context"
+	"encoding/json"
+	"io/fs"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
@@ -69,8 +74,13 @@ func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 		return client.New(ctx, addr, opts...)
 	}
 
+	host, err := DockerHost(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to determine docker host")
+	}
 	// no address, attempt to use docker built-in buildkit
 	dc, err := dockerclient.NewClientWithOpts(
+		dockerclient.WithHost(host),
 		dockerclient.WithAPIVersionNegotiation(),
 	)
 	if err != nil {
@@ -82,4 +92,99 @@ func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 		return dc.DialHijack(ctx, "/session", proto, meta)
 	}))
 	return client.New(ctx, "", opts...)
+}
+
+// DockerDir returns the path to the user's Docker config dir.
+// Reads DOCKER_CONFIG, and HOME env vars.
+func DockerDir(ctx context.Context) string {
+	dockerConfigDir := Getenv(ctx, "DOCKER_CONFIG")
+	if dockerConfigDir != "" {
+		return dockerConfigDir
+	}
+
+	home := Getenv(ctx, "HOME")
+	if home == "" {
+		return ""
+	}
+
+	return filepath.Join(home, ".docker")
+}
+
+// DockerConf returns the path to the user's Docker config.json.
+func DockerConf(dockerDir string) string {
+	if dockerDir == "" {
+		return ""
+	}
+	return filepath.Join(dockerDir, "config.json")
+}
+
+// DockerHost returns the value of the DOCKER_HOST env var, or the default.
+func DockerHost(ctx context.Context) (string, error) {
+	dockerHost, ok := LookupEnv(ctx, "DOCKER_HOST")
+	if ok {
+		return dockerHost, nil
+	}
+
+	dockerDir := DockerDir(ctx)
+	if dockerDir == "" {
+		return dockerclient.DefaultDockerHost, nil
+	}
+
+	dockerConfigPath := DockerConf(dockerDir)
+	var dockerConfig struct {
+		CurrentContext string `json:"currentContext"`
+	}
+	configBytes, err := os.ReadFile(dockerConfigPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return dockerclient.DefaultDockerHost, nil
+		}
+		return "", errors.Wrapf(err, "reading %s", dockerConfigPath)
+	}
+
+	if err := json.Unmarshal(configBytes, &dockerConfig); err != nil {
+		return "", errors.Wrapf(err, "invalid json in %s", dockerConfigPath)
+	}
+
+	if dockerConfig.CurrentContext != "" {
+		var contextHost string
+		contextDir := filepath.Join(dockerDir, "contexts")
+		err := filepath.WalkDir(contextDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if contextHost != "" ||
+				d.IsDir() ||
+				!strings.HasSuffix(d.Name(), ".json") {
+				return nil
+			}
+
+			var dockerContext struct {
+				Name      string `json:"name"`
+				Endpoints struct {
+					Docker struct {
+						Host string `json:"host"`
+					} `json:"docker"`
+				} `json:"endpoints"`
+			}
+			contextBytes, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(contextBytes, &dockerContext); err != nil {
+				return errors.Wrapf(err, "failed to unmarshal %s", path)
+			}
+			if dockerContext.Name == dockerConfig.CurrentContext {
+				contextHost = dockerContext.Endpoints.Docker.Host
+			}
+			return nil
+		})
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to walk docker contexts dir: %s", contextDir)
+		}
+		if contextHost != "" {
+			return contextHost, nil
+		}
+	}
+	return dockerclient.DefaultDockerHost, nil
 }

@@ -17,7 +17,7 @@ import (
 
 func TestYAML(t *testing.T) {
 	t.Parallel()
-	r := newTestRunner(t, withTimeout(10*time.Second))
+	r := newTestRunner(t, withTimeout(60*time.Second))
 
 	states := func(s ...llb.State) []llb.State {
 		return s
