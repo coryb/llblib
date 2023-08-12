@@ -120,8 +120,8 @@ func DockerConf(dockerDir string) string {
 
 // DockerHost returns the value of the DOCKER_HOST env var, or the default.
 func DockerHost(ctx context.Context) (string, error) {
-	dockerHost, ok := LookupEnv(ctx, "DOCKER_HOST")
-	if ok {
+	dockerHost := Getenv(ctx, "DOCKER_HOST")
+	if dockerHost != "" {
 		return dockerHost, nil
 	}
 
