@@ -3,6 +3,7 @@ package llblib
 import (
 	"context"
 	goerrors "errors"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 	"github.com/moby/buildkit/frontend/gateway/client"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/muesli/cancelreader"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
@@ -72,11 +74,15 @@ func (noopWriteCloser) Close() error {
 
 // WithTTY will run the container with the provided in/out/err connected to the
 // tty in the container.  Resize events will automatically be propagated.
-func WithTTY(in FdReader, out, err io.Writer) ContainerOption {
+func WithTTY(in FdReader, outW, errW io.Writer) ContainerOption {
 	return containerOptionFunc(func(co *ContainerOptions) {
 		co.Tty = true
-		WithInput(in).SetContainerOptions(co)
-		WithOutput(out, err).SetContainerOptions(co)
+		inReader, err := cancelreader.NewReader(in)
+		if err != nil {
+			panic(fmt.Sprintf("create cancel reader: %s", err))
+		}
+		WithInput(inReader).SetContainerOptions(co)
+		WithOutput(outW, errW).SetContainerOptions(co)
 		co.Setup = append(co.Setup, func(ctx context.Context) error {
 			oldState, err := term.MakeRaw(int(in.Fd()))
 			if err != nil {
@@ -113,6 +119,7 @@ func WithTTY(in FdReader, out, err io.Writer) ContainerOption {
 			signal.Notify(ch, syscall.SIGWINCH)
 			co.Teardown = append(co.Teardown, func() error {
 				signal.Stop(ch)
+				inReader.Cancel()
 				return nil
 			}, func() error {
 				if err := eg.Wait(); err != nil {
