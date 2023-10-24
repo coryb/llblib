@@ -5,9 +5,9 @@ import (
 	"path"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/dockerfile/builder"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
+	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/solver/pb"
 	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -61,7 +61,7 @@ func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOpt
 		docOpts := DockerfileOpts{
 			LLBCaps:      &caps,
 			MetaResolver: LoadImageResolver(ctx),
-			BuildContext: &buildContext,
+			MainContext:  &buildContext,
 		}
 		for _, opt := range opts {
 			opt.SetDockerfileOption(&docOpts)
@@ -96,12 +96,12 @@ func syntaxSourceSolve(
 	opts DockerfileOpts,
 ) (llb.State, error) {
 	feOpts := []FrontendOption{
-		FrontendInput(builder.DefaultLocalNameDockerfile, llb.Scratch().File(
+		FrontendInput(dockerui.DefaultLocalNameDockerfile, llb.Scratch().File(
 			llb.Mkfile(defaultDockerfileName, 0o644, dockerfile),
 		)),
 	}
-	if opts.BuildContext != nil {
-		feOpts = append(feOpts, FrontendInput(builder.DefaultLocalNameContext, *opts.BuildContext))
+	if opts.MainContext != nil {
+		feOpts = append(feOpts, FrontendInput(dockerui.DefaultLocalNameContext, *opts.MainContext))
 	}
 
 	if opts.TargetPlatform != nil {

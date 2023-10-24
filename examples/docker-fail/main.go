@@ -40,7 +40,7 @@ func main() {
 		llblib.WithTTY(os.Stdin, os.Stdout, os.Stderr),
 	))
 
-	prog := progress.NewProgress(progress.WithConsole(console.Current()))
+	prog := progress.NewProgress(progress.WithOutput(console.Current()))
 	defer prog.Close()
 
 	sess, err := slv.NewSession(ctx, cli, prog)

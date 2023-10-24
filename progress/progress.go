@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/containerd/console"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
 )
@@ -45,17 +44,7 @@ func (f progressOptionFunc) SetProgressOption(p *progress) {
 	f(p)
 }
 
-// WithConsole is used to direct the "tty" buildkit output to the provided
-// console. Typically used like:
-//
-//	progress.NewProgress(progress.WithConsole(console.Current()))
-func WithConsole(c console.Console) Option {
-	return progressOptionFunc(func(p *progress) {
-		p.console = c
-	})
-}
-
-// WithOutput is used to direct the "plain" buildkit output to an io.Writer.
+// WithOutput is used to direct the buildkit output to an io.Writer or console.
 func WithOutput(w io.Writer) Option {
 	return progressOptionFunc(func(p *progress) {
 		p.writer = w
@@ -87,7 +76,6 @@ type seenKey struct {
 
 type progress struct {
 	statusCh chan *client.SolveStatus
-	console  console.Console
 	writer   io.Writer
 
 	children  int
@@ -101,7 +89,10 @@ type progress struct {
 
 func (p *progress) start() {
 	go func() {
-		_, err := progressui.DisplaySolveStatus(context.Background(), "", p.console, p.writer, p.statusCh)
+		d, err := progressui.NewDisplay(p.writer, progressui.DefaultMode)
+		if err == nil {
+			_, err = d.UpdateFrom(context.Background(), p.statusCh)
+		}
 		p.done <- err
 		close(p.done)
 	}()
