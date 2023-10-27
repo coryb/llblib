@@ -221,7 +221,7 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 			opt.SetLocalOption(&localInfo)
 		}
 
-		var walkOpts fsutil.WalkOpt
+		var walkOpts fsutil.FilterOpt
 		if localInfo.IncludePatterns != "" {
 			if err := json.Unmarshal([]byte(localInfo.IncludePatterns), &walkOpts.IncludePatterns); err != nil {
 				return "", errors.Wrap(err, "failed to unmarshal IncludePatterns for localUniqueID")
@@ -384,14 +384,21 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	dirSource := filesync.StaticDirSource{}
 	if len(s.localDirs) > 0 {
 		for name, localDir := range s.localDirs {
-			dirSource[name] = filesync.SyncedDir{
-				Dir: localDir,
+			dirSourceFS, err := fsutil.NewFS(localDir)
+			if err != nil {
+				return nil, err
+			}
+			dirSourceFS, err = fsutil.NewFilterFS(dirSourceFS, &fsutil.FilterOpt{
 				Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
 					st.Uid = 0
 					st.Gid = 0
 					return fsutil.MapResultKeep
 				},
+			})
+			if err != nil {
+				return nil, err
 			}
+			dirSource[name] = dirSourceFS
 		}
 		attachables = append(attachables, filesync.NewFSSyncProvider(dirSource))
 	}
@@ -416,7 +423,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	// By default, forward docker authentication through the session.
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	attachables = append(attachables, authprovider.NewDockerAuthProvider(dockerConfig))
+	attachables = append(attachables, authprovider.NewDockerAuthProvider(dockerConfig, nil))
 
 	// for each download we need a uniq session.  This is a hack, there has been
 	// some discussion for buildkit to have a session manager available to the

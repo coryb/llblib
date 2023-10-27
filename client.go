@@ -33,7 +33,7 @@ import (
 //
 // Then use this `addr` value: `docker-container://buildkitd`
 func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
-	cln, err := newClient(ctx, addr, opts)
+	cln, err := newClient(ctx, addr, opts...)
 	if err != nil {
 		return nil, err
 	}

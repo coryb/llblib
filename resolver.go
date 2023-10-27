@@ -28,8 +28,8 @@ func newResolver(cln *client.Client, cache *resolveImageCache, sess *bksess.Sess
 	}
 }
 
-func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
-	return r.cache.lookup(ctx, ref, opt, func() (digest.Digest, []byte, error) {
+func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (string, digest.Digest, []byte, error) {
+	return r.cache.lookup(ctx, ref, opt, func() (string, digest.Digest, []byte, error) {
 		opts := client.SolveOpt{}
 		if r.sess != nil {
 			opts.SharedSession = r.sess
@@ -41,13 +41,13 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.R
 			err    error
 		)
 		_, buildErr := r.cln.Build(ctx, opts, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			d, config, err = c.ResolveImageConfig(ctx, ref, opt)
+			ref, d, config, err = c.ResolveImageConfig(ctx, ref, opt)
 			return nil, nil
 		}, r.prog.Channel())
 		if buildErr != nil {
-			return "", nil, buildErr
+			return "", "", nil, buildErr
 		}
-		return d, config, err
+		return ref, d, config, err
 	})
 }
 
@@ -62,6 +62,7 @@ type resolveImageCacheKey struct {
 }
 
 type resolveImageCacheValue struct {
+	ref      string
 	digest   digest.Digest
 	config   []byte
 	err      error
@@ -77,8 +78,8 @@ func (r *resolveImageCache) lookup(
 	ctx context.Context,
 	ref string,
 	opt llb.ResolveImageConfigOpt,
-	resolver func() (digest.Digest, []byte, error),
-) (digest.Digest, []byte, error) {
+	resolver func() (string, digest.Digest, []byte, error),
+) (string, digest.Digest, []byte, error) {
 	key := resolveImageCacheKey{
 		resolveType: opt.ResolverType,
 		ref:         ref,
@@ -107,16 +108,17 @@ func (r *resolveImageCache) lookup(
 	return val.fetch(ctx)
 }
 
-func (v *resolveImageCacheValue) fetch(ctx context.Context) (digest.Digest, []byte, error) {
+func (v *resolveImageCacheValue) fetch(ctx context.Context) (string, digest.Digest, []byte, error) {
 	select {
 	case <-ctx.Done():
-		return "", nil, ctx.Err()
+		return "", "", nil, ctx.Err()
 	case <-v.inflight:
-		return v.digest, v.config, v.err
+		return v.ref, v.digest, v.config, v.err
 	}
 }
 
-func (v *resolveImageCacheValue) store(d digest.Digest, config []byte, err error) {
+func (v *resolveImageCacheValue) store(ref string, d digest.Digest, config []byte, err error) {
+	v.ref = ref
 	v.digest = d
 	v.config = config
 	v.err = err
