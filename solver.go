@@ -133,6 +133,11 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 		return llb.Scratch()
 	}
 
+	li := llb.LocalInfo{}
+	for _, opt := range opts {
+		opt.SetLocalOption(&li)
+	}
+
 	absPath := name
 	if !filepath.IsAbs(absPath) {
 		absPath = filepath.Join(s.cwd, name)
@@ -157,16 +162,18 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 		)
 	}
 
-	id, err := localID(absPath, opts...)
-	if err != nil {
-		s.err = errors.Wrap(err, "error calculating id for local")
-		return llb.Scratch()
+	if li.LocalUniqueID == "" {
+		id, err := localID(absPath, opts...)
+		if err != nil {
+			s.err = errors.Wrap(err, "error calculating id for local")
+			return llb.Scratch()
+		}
+		opts = append(opts, llb.LocalUniqueID(id))
+		li.LocalUniqueID = id
 	}
-
-	opts = append(opts,
-		llb.SharedKeyHint(id),
-		llb.LocalUniqueID(id),
-	)
+	if li.SharedKeyHint == "" {
+		opts = append(opts, llb.SharedKeyHint(li.LocalUniqueID))
+	}
 
 	s.mu.Lock()
 	s.localDirs[name] = localDir

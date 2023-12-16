@@ -229,6 +229,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 				}
 
 				r, err := c.Solve(ctx, client.SolveRequest{
+					Evaluate:   true,
 					Definition: def.ToPB(),
 				})
 				if err != nil {
