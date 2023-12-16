@@ -53,6 +53,11 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		return noop
 	}
 
+	si := llb.SSHInfo{}
+	for _, opt := range opts {
+		opt.SetSSHOption(&si)
+	}
+
 	srcURL, err := url.Parse(src)
 	if err != nil {
 		s.err = errors.Wrapf(err, "unable to parse source for forward: %s", src)
@@ -60,7 +65,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 	}
 
 	var (
-		id        string
+		id        = si.ID
 		localPath string
 	)
 
@@ -75,7 +80,9 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 			s.err = errors.Wrapf(err, "error reading directory for forward: %s", localPath)
 			return noop
 		}
-		id = digest.FromString(localPath).String()
+		if id == "" {
+			id = digest.FromString(localPath).String()
+		}
 		s.mu.Lock()
 		s.agentConfigs[id] = sockproxy.AgentConfig{
 			ID:    id,
@@ -84,7 +91,9 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		}
 		s.mu.Unlock()
 	case "tcp":
-		id = digest.FromString(src).String()
+		if id == "" {
+			id = digest.FromString(src).String()
+		}
 		helper := func(ctx context.Context) (release func() error, err error) {
 			dir, err := os.MkdirTemp("", "forward")
 			if err != nil {
