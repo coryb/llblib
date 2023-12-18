@@ -70,7 +70,7 @@ func ErrUnimplemented(err error) bool {
 }
 
 func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
-	if addr != "" {
+	if addr != "" && !strings.HasPrefix(addr, "docker://") {
 		return client.New(ctx, addr, opts...)
 	}
 

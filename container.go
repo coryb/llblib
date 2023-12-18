@@ -5,8 +5,6 @@ import (
 	goerrors "errors"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 	"syscall"
 
 	"github.com/moby/buildkit/client/llb"
@@ -16,7 +14,6 @@ import (
 	"github.com/muesli/cancelreader"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
 
@@ -83,6 +80,7 @@ func WithTTY(in FdReader, outW, errW io.Writer) ContainerOption {
 		}
 		WithInput(inReader).SetContainerOptions(co)
 		WithOutput(outW, errW).SetContainerOptions(co)
+
 		co.Setup = append(co.Setup, func(ctx context.Context) error {
 			oldState, err := term.MakeRaw(int(in.Fd()))
 			if err != nil {
@@ -91,44 +89,13 @@ func WithTTY(in FdReader, outW, errW io.Writer) ContainerOption {
 			co.Teardown = append(co.Teardown, func() error {
 				return term.Restore(int(in.Fd()), oldState)
 			})
-			resize := make(chan gateway.WinSize, 1)
-			co.Resize = resize
-
-			ch := make(chan os.Signal, 1)
-			ch <- syscall.SIGWINCH // Initial resize.
-
-			var eg errgroup.Group
-			eg.Go(func() error {
-				for {
-					select {
-					case <-ctx.Done():
-						close(ch)
-						return nil
-					case <-ch:
-						ws, err := unix.IoctlGetWinsize(int(in.Fd()), unix.TIOCGWINSZ)
-						if err != nil {
-							return errors.Wrap(err, "failed to get winsize")
-						}
-						resize <- gateway.WinSize{
-							Cols: uint32(ws.Col),
-							Rows: uint32(ws.Row),
-						}
-					}
-				}
-			})
-			signal.Notify(ch, syscall.SIGWINCH)
 			co.Teardown = append(co.Teardown, func() error {
-				signal.Stop(ch)
 				inReader.Cancel()
-				return nil
-			}, func() error {
-				if err := eg.Wait(); err != nil {
-					return errors.Wrap(err, "SIGWINCH event loop failed")
-				}
 				return nil
 			})
 			return nil
 		})
+		handleResize(co, int(in.Fd()))
 	})
 }
 
@@ -229,6 +196,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 				}
 
 				r, err := c.Solve(ctx, client.SolveRequest{
+					Evaluate:   true,
 					Definition: def.ToPB(),
 				})
 				if err != nil {
