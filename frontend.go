@@ -78,12 +78,20 @@ func (o constraintsToOptions) SetConstraintsOption(c *llb.Constraints) {
 //		llblib.FrontendInput("dockerfile", dockerfile),
 //	)
 func Frontend(source string, opts ...FrontendOption) llb.State {
+	// "gateway.v0" is used to trampoline the solve to the source docker image
+	// however "dockerfile.v0" is a built-in frontend, so we dont need to
+	// trampoline and can directly use it.
+	frontend := "gateway.v0"
+	if source == "dockerfile.v0" {
+		frontend = source
+	}
 	return llb.Scratch().Async(func(ctx context.Context, st llb.State, constraints *llb.Constraints) (llb.State, error) {
 		fo := frontendOptions{
 			Inputs: map[string]llb.State{},
-			Opts: map[string]string{
-				"source": source,
-			},
+			Opts:   map[string]string{},
+		}
+		if source != "dockerfile.v0" {
+			fo.Opts["source"] = source
 		}
 		for _, opt := range opts {
 			opt.SetFrontendOption(&fo)
@@ -116,7 +124,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 					}
 				}
 				req := gateway.SolveRequest{
-					Frontend:       "gateway.v0",
+					Frontend:       frontend,
 					FrontendOpt:    fo.Opts,
 					FrontendInputs: inputs,
 				}
