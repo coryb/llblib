@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/gateway/client"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/muesli/cancelreader"
@@ -188,14 +187,14 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 		}
 
 		for i, m := range containerOpts.Mounts {
-			var ref client.Reference
+			var ref gateway.Reference
 			if st, ok := mountStates[m.Dest]; ok && m.MountType == pb.MountType_BIND {
 				def, err := st.Marshal(ctx)
 				if err != nil {
 					return nil, errors.Wrapf(err, "failed to mount state for %s", m.Dest)
 				}
 
-				r, err := c.Solve(ctx, client.SolveRequest{
+				r, err := c.Solve(ctx, gateway.SolveRequest{
 					Evaluate:   true,
 					Definition: def.ToPB(),
 				})

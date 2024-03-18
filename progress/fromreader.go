@@ -30,12 +30,10 @@ func FromReader(p Progress, name string, rc io.ReadCloser) {
 		Vertexes: []*client.Vertex{&vtx},
 	}
 
-	_, err := io.Copy(io.Discard, rc)
-
 	tm2 := time.Now()
 	vtx2 := vtx
 	vtx2.Completed = &tm2
-	if err != nil {
+	if _, err := io.Copy(io.Discard, rc); err != nil {
 		vtx2.Error = err.Error()
 	}
 	ch <- &client.SolveStatus{

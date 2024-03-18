@@ -1,8 +1,9 @@
 package llblib_test
 
 import (
-	"bytes"
+	"bufio"
 	"context"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -53,12 +54,11 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 		cln.Close()
 	})
 
-	var buf bytes.Buffer
-	prog := progress.NewProgress(progress.WithOutput(&buf))
+	w := newTestWriter(t)
+	prog := progress.NewProgress(progress.WithOutput(w))
 	t.Cleanup(func() {
 		prog.Close()
-		t.Helper()
-		t.Logf("build output:\n%s", buf.String())
+		w.Close()
 	})
 
 	return testRunner{
@@ -85,4 +85,37 @@ func (r testRunner) Session(t *testing.T) llblib.Session {
 		sess.Release()
 	})
 	return sess
+}
+
+type tWriter struct {
+	testing.TB
+	reader *io.PipeReader
+	writer *io.PipeWriter
+	done   chan struct{}
+}
+
+var _ io.WriteCloser = (*tWriter)(nil)
+
+func newTestWriter(t testing.TB) io.WriteCloser {
+	t.Helper()
+	r, w := io.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			t.Log(scanner.Text())
+		}
+	}()
+	return &tWriter{TB: t, reader: r, writer: w, done: done}
+}
+
+func (w *tWriter) Close() error {
+	w.writer.Close()
+	<-w.done
+	return w.reader.Close()
+}
+
+func (w tWriter) Write(p []byte) (n int, err error) {
+	return w.writer.Write(p)
 }

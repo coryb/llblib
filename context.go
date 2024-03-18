@@ -45,7 +45,7 @@ func (p nullProgress) Label(string) progress.Progress {
 func (p nullProgress) Channel(opts ...progress.ChannelOption) chan *client.SolveStatus {
 	ch := make(chan *client.SolveStatus)
 	go func() {
-		for range ch {
+		for range ch { //nolint:revive
 			// toss
 		}
 	}()

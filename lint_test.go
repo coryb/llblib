@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const GolangCILintVersion = "v1.51.2"
+const GolangCILintVersion = "v1.56.2"
 
 func TestLint(t *testing.T) {
 	t.Parallel()

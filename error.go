@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/gateway/client"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
@@ -93,7 +92,7 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 					return errors.Wrapf(err, "failed to mount state for %s", m.Dest)
 				}
 
-				r, err := c.Solve(ctx, client.SolveRequest{
+				r, err := c.Solve(ctx, gateway.SolveRequest{
 					Definition: def.ToPB(),
 				})
 				if err != nil {
