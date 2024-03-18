@@ -1,28 +1,175 @@
 linters:
-  enable-all: false
-  disable-all: true
-  enable:
+  enable-all: true
+  disable-all: false
+  disable:
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - cyclop
+    - deadcode # deprecated
     - depguard
+    - dogsled
+    - dupl
+    - dupword
+    - errcheck
+    - errname
+    - exhaustive
+    - exhaustivestruct
+    - exhaustruct
     - exportloopref
-    - gocritic
-    - gofmt
-    - goimports
-    - gosimple
-    - govet
-    - ineffassign
-    - misspell
-    - revive
-    - typecheck
-    - unconvert
-    - unparam
-    - unused
-    - exportloopref
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gci
+    - ginkgolinter
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - gocyclo
+    - godot
+    - godox
+    - goerr113
+    - gofumpt
+    - golint
+    - gomnd
+    - gomoddirectives
+    - gosec
+    - gosmopolitan
+    - ifshort # deprecated
+    - inamedparam
+    - interfacebloat
+    - interfacer
+    - ireturn
+    - lll
+    - maintidx
+    - makezero
+    - maligned
+    - musttag
+    - nakedret
+    - nestif
+    - nilnil
+    - nlreturn
+    - nonamedreturns
+    - nosnakecase
+    - paralleltest
+    - prealloc
+    - predeclared
+    - protogetter
+    - rowserrcheck
+    - scopelint
+    - sqlclosecheck
     - staticcheck
+    - structcheck # deprecated
+    - tagalign
+    - tagliatelle
+    - testifylint
+    - testpackage
+    - thelper
+    - tparallel
+    - varcheck # deprecated
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - zerologlint
+
+    # TODO: These linters seem potentially worth enabling, but will take a little work
+    - goconst
+    - errchkjson
 
 issues:
   exclude-use-default: false
+  exclude:
+    - ST1005
+    - "result .* is always (false|nil|`nil`)"
+    - "error-strings"
+    - "and that stutters"
+    - "should have a package comment"
+    - "ifElseChain"
+    - "unused-parameter:"
   max-same-issues: 0
   max-issues-per-linter: 0
 
 run:
-  skip-dirs-use-default: false
+  skip-dirs:
+    - docs/tools/parsedoc
+
+linters-settings:
+  revive:
+    enable-all-rules: true
+    rules:
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#add-constant
+      - name: add-constant
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#argument-limit
+      - name: argument-limit
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#bare-return
+      - name: bare-return
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cognitive-complexity
+      - name: cognitive-complexity
+        disabled: true
+      - name: comment-spacings
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#confusing-naming
+      - name: confusing-naming
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#confusing-results
+      - name: confusing-results
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cyclomatic
+      - name: cyclomatic
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#deep-exit
+      - name: deep-exit
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#defer
+      - name: defer
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#dot-imports
+      - name: dot-imports
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#flag-parameter
+      - name: flag-parameter
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#function-result-limit
+      - name: function-result-limit
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#function-length
+      - name: function-length
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#get-return
+      - name: get-return
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#import-alias-naming
+      - name: import-alias-naming
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#line-length-limit
+      - name: line-length-limit
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#max-public-structs
+      - name: max-public-structs
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#nested-structs
+      - name: nested-structs
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#range-val-in-closure
+      - name: range-val-in-closure
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#range-val-address
+      - name: range-val-address
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#redundant-import-alias
+      - name: redundant-import-alias
+        disabled: true
+      - name: unchecked-type-assertion
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unhandled-error
+      - name: unhandled-error
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unused-receiver
+      - name: unused-receiver
+        disabled: true
+  govet:
+    disable:
+      - loopclosure

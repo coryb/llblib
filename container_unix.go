@@ -53,5 +53,4 @@ func handleResize(co *ContainerOptions, fd int) {
 		})
 		return nil
 	})
-
 }

@@ -15,27 +15,32 @@ import (
 // DockerfileOpts alias dockerfile2llb.ConvertOpt
 type DockerfileOpts = dockerfile2llb.ConvertOpt
 
-// DockerfileOption can be used to modify a Dockerfile request.
-type DockerfileOption interface {
-	SetDockerfileOption(*DockerfileOpts)
+type dockerfileOpts struct {
+	DockerfileOpts
+	buildContexts map[string]llb.State
 }
 
-type dockerfileOptionFunc func(*DockerfileOpts)
+// DockerfileOption can be used to modify a Dockerfile request.
+type DockerfileOption interface {
+	SetDockerfileOption(*dockerfileOpts)
+}
 
-func (f dockerfileOptionFunc) SetDockerfileOption(o *DockerfileOpts) {
+type dockerfileOptionFunc func(*dockerfileOpts)
+
+func (f dockerfileOptionFunc) SetDockerfileOption(o *dockerfileOpts) {
 	f(o)
 }
 
 // WithTarget will set the target for the Dockerfile build.
 func WithTarget(t string) DockerfileOption {
-	return dockerfileOptionFunc(func(o *DockerfileOpts) {
+	return dockerfileOptionFunc(func(o *dockerfileOpts) {
 		o.Target = t
 	})
 }
 
 // WithBuildArg can be used to set build args for the Dockerfile build.
 func WithBuildArg(k, v string) DockerfileOption {
-	return dockerfileOptionFunc(func(o *DockerfileOpts) {
+	return dockerfileOptionFunc(func(o *dockerfileOpts) {
 		if o.BuildArgs == nil {
 			o.BuildArgs = map[string]string{
 				k: v,
@@ -48,8 +53,22 @@ func WithBuildArg(k, v string) DockerfileOption {
 
 // WithTargetPlatform will set the platform for the Dockerfile build.
 func WithTargetPlatform(p *specsv1.Platform) DockerfileOption {
-	return dockerfileOptionFunc(func(o *DockerfileOpts) {
+	return dockerfileOptionFunc(func(o *dockerfileOpts) {
 		o.TargetPlatform = p
+	})
+}
+
+// WithBuildContext will set an additional build context for the Dockerfile
+// build.
+func WithBuildContext(name string, st llb.State) DockerfileOption {
+	return dockerfileOptionFunc(func(o *dockerfileOpts) {
+		if o.buildContexts == nil {
+			o.buildContexts = map[string]llb.State{
+				name: st,
+			}
+			return
+		}
+		o.buildContexts[name] = st
 	})
 }
 
@@ -58,18 +77,24 @@ func WithTargetPlatform(p *specsv1.Platform) DockerfileOption {
 func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOption) llb.State {
 	return llb.Scratch().Async(func(ctx context.Context, _ llb.State, c *llb.Constraints) (llb.State, error) {
 		caps := pb.Caps.CapSet(pb.Caps.All())
-		docOpts := DockerfileOpts{
-			LLBCaps:      &caps,
-			MetaResolver: LoadImageResolver(ctx),
-			MainContext:  &buildContext,
+		docOpts := dockerfileOpts{
+			DockerfileOpts: DockerfileOpts{
+				LLBCaps:      &caps,
+				MetaResolver: LoadImageResolver(ctx),
+				MainContext:  &buildContext,
+			},
 		}
 		for _, opt := range opts {
 			opt.SetDockerfileOption(&docOpts)
 		}
 		if source, _, _, ok := parser.DetectSyntax(dockerfile); ok {
-			return syntaxSourceSolve(source, dockerfile, docOpts)
+			return frontendDockerfileSolve(source, dockerfile, docOpts)
 		}
-		return directSolve(ctx, dockerfile, docOpts)
+		if len(docOpts.buildContexts) > 0 {
+			// we cannot use the direct solve if we have additional inputs
+			return frontendDockerfileSolve("dockerfile.v0", dockerfile, docOpts)
+		}
+		return directSolve(ctx, dockerfile, docOpts.DockerfileOpts)
 	})
 }
 
@@ -90,10 +115,10 @@ const (
 	defaultDockerfileName = "Dockerfile"
 )
 
-func syntaxSourceSolve(
+func frontendDockerfileSolve(
 	source string,
 	dockerfile []byte,
-	opts DockerfileOpts,
+	opts dockerfileOpts,
 ) (llb.State, error) {
 	feOpts := []FrontendOption{
 		FrontendInput(dockerui.DefaultLocalNameDockerfile, llb.Scratch().File(
@@ -102,6 +127,13 @@ func syntaxSourceSolve(
 	}
 	if opts.MainContext != nil {
 		feOpts = append(feOpts, FrontendInput(dockerui.DefaultLocalNameContext, *opts.MainContext))
+	}
+
+	for name, state := range opts.buildContexts {
+		feOpts = append(feOpts,
+			FrontendOpt("context:"+name, "input:"+name),
+			FrontendInput(name, state),
+		)
 	}
 
 	if opts.TargetPlatform != nil {

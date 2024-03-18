@@ -102,3 +102,90 @@ RUN false # <- should not run
 	require.NoError(t, err)
 	require.Equal(t, "custom\n", string(got))
 }
+
+func TestDockerfileBuildContexts(t *testing.T) {
+	t.Parallel()
+	r := newTestRunner(t)
+
+	linux := specsv1.Platform{
+		OS:           "linux",
+		Architecture: runtime.GOARCH,
+	}
+
+	dockerfile1 := `
+		FROM busybox
+		# copy from default build-context
+		COPY file1 file1
+		# copy from extra build-context
+		COPY --from=extra file2 file2
+	`
+
+	dockerfile2 := `
+		FROM busybox
+		# copy from default build-context
+		COPY file3 file3
+		# copy from extra build-context
+		COPY --from=extra file2 file4
+	`
+
+	tdir := t.TempDir()
+	err := os.WriteFile(filepath.Join(tdir, "file2"), nil, 0o644)
+	require.NoError(t, err)
+
+	st1 := llblib.Dockerfile(
+		[]byte(dockerfile1),
+		llb.Scratch().File(llb.Mkfile("file1", 0o644, nil)),
+		llblib.WithTargetPlatform(&linux),
+		llblib.WithBuildContext("extra", r.Solver.Local(tdir)),
+	)
+
+	st := llblib.Dockerfile(
+		[]byte(dockerfile2),
+		llb.Scratch().File(llb.Mkfile("file3", 0o644, nil)),
+		llblib.WithTargetPlatform(&linux),
+		llblib.WithBuildContext("extra", st1),
+	)
+
+	req := r.Solver.Build(st)
+	err = r.Run(t, req)
+	require.NoError(t, err)
+}
+
+func TestDockerfileRunMounts(t *testing.T) {
+	t.Parallel()
+	r := newTestRunner(t)
+
+	linux := specsv1.Platform{
+		OS:           "linux",
+		Architecture: runtime.GOARCH,
+	}
+
+	dockerfile := `
+		FROM busybox
+		RUN --mount=type=bind,from=my.input,source=file1,target=/opt/file1 ls -l /opt/file1
+		RUN --mount=type=cache,from=my.cache,target=/cache ls -l /cache/file1
+		RUN --mount=type=tmpfs,target=/tmp touch /tmp/foobar
+		RUN --mount=type=secret,id=my.secret,target=/secret test $(cat /secret) = "shhh"
+	`
+	inputDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(inputDir, "file1"), nil, 0o644)
+	require.NoError(t, err)
+
+	secretDir := t.TempDir()
+	err = os.WriteFile(filepath.Join(secretDir, "secret"), []byte("shhh"), 0o644)
+	require.NoError(t, err)
+
+	st := llblib.Dockerfile(
+		[]byte(dockerfile),
+		llb.Scratch(),
+		llblib.WithTargetPlatform(&linux),
+		llblib.WithBuildContext("my.input", r.Solver.Local(inputDir)),
+		llblib.WithBuildContext("my.cache", r.Solver.Local(inputDir)),
+	)
+
+	r.Solver.AddSecretFile(filepath.Join(secretDir, "secret"), "", llb.SecretID("my.secret"))
+
+	req := r.Solver.Build(st)
+	err = r.Run(t, req)
+	require.NoError(t, err)
+}

@@ -18,7 +18,7 @@ func TestWithEnv(t *testing.T) {
 	require.Equal(t, "", got)
 
 	// verify fallback to os env
-	os.Setenv("FOO", "BAR")
+	t.Setenv("FOO", "BAR")
 	require.Equal(t, "BAR", Getenv(ctx, "FOO"))
 	got, ok = LookupEnv(ctx, "FOO")
 	require.True(t, ok)

@@ -38,14 +38,15 @@ func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 		return nil, err
 	}
 
-	if _, err := cln.Info(ctx); err != nil {
-		// Info API added in v0.11
-		if !ErrUnimplemented(err) {
-			cln.Close()
-			return nil, errors.Wrapf(err, "unable to connect to buildkitd")
-		}
-	} else {
+	_, err = cln.Info(ctx)
+	if err == nil {
 		return cln, nil
+	}
+
+	// Info API added in v0.11
+	if !ErrUnimplemented(err) {
+		cln.Close()
+		return nil, errors.Wrapf(err, "unable to connect to buildkitd")
 	}
 
 	// If we are still here then Info is Unimplemented, so fallback to

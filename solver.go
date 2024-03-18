@@ -182,7 +182,7 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 	// Copy the local to scratch for better caching via buildkit
 	return llb.Scratch().File(
 		llb.Copy(llb.Local(name, opts...), "/", "/"),
-		llb.WithCustomName(fmt.Sprintf("caching local://%s", name)),
+		llb.WithCustomName("caching local://"+name),
 	)
 }
 
@@ -271,7 +271,6 @@ func firstUpInterface() string {
 			continue // no mac
 		}
 		return iface.HardwareAddr.String()
-
 	}
 	return "no-valid-interface"
 }
@@ -280,14 +279,21 @@ func (s *solver) AddSecretFile(src, dest string, opts ...llb.SecretOption) llb.R
 	if !filepath.IsAbs(src) {
 		src = filepath.Join(s.cwd, src)
 	}
-	id := digest.FromString(src).String()
+	so := llb.SecretInfo{}
+	for _, opt := range opts {
+		opt.SetSecretOption(&so)
+	}
+	id := so.ID
+	if id == "" {
+		id = digest.FromString(src).String()
+		opts = append(opts, llb.SecretID(id))
+	}
 	s.mu.Lock()
 	s.secrets[id] = secretsprovider.Source{
 		ID:       id,
 		FilePath: src,
 	}
 	s.mu.Unlock()
-	opts = append(opts, llb.SecretID(id))
 	return llb.AddSecret(dest, opts...)
 }
 

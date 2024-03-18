@@ -544,22 +544,22 @@ func (g graphState) yamlFileOp(dgst digest.Digest, op *pb.Op, f *pb.FileOp) (*ya
 }
 
 func (g graphState) yamlFileCopy(c *pb.FileActionCopy) *yaml.Node {
-	copy := walky.NewMappingNode()
-	yamlAddKV(copy, "type", "COPY")
-	yamlAddKV(copy, "src", c.Src)
-	yamlAddKV(copy, "dest", c.Dest)
-	yamlAddOwner(copy, c.Owner)
-	yamlAddMode(copy, c.Mode)
-	yamlAddBool(copy, "follow-symlinks", c.FollowSymlink)
-	yamlAddBool(copy, "contents-only", c.DirCopyContents)
-	yamlAddBool(copy, "unpack-archive", c.AttemptUnpackDockerCompatibility)
-	yamlAddBool(copy, "create-dest-path", c.CreateDestPath)
-	yamlAddBool(copy, "allow-wildcard", c.AllowWildcard)
-	yamlAddBool(copy, "allow-empty-wildcard", c.AllowEmptyWildcard)
-	yamlAddTime(copy, c.Timestamp)
-	yamlAddSeq(copy, "include-patterns", c.IncludePatterns)
-	yamlAddSeq(copy, "exclude-patterns", c.ExcludePatterns)
-	return copy
+	cp := walky.NewMappingNode()
+	yamlAddKV(cp, "type", "COPY")
+	yamlAddKV(cp, "src", c.Src)
+	yamlAddKV(cp, "dest", c.Dest)
+	yamlAddOwner(cp, c.Owner)
+	yamlAddMode(cp, c.Mode)
+	yamlAddBool(cp, "follow-symlinks", c.FollowSymlink)
+	yamlAddBool(cp, "contents-only", c.DirCopyContents)
+	yamlAddBool(cp, "unpack-archive", c.AttemptUnpackDockerCompatibility)
+	yamlAddBool(cp, "create-dest-path", c.CreateDestPath)
+	yamlAddBool(cp, "allow-wildcard", c.AllowWildcard)
+	yamlAddBool(cp, "allow-empty-wildcard", c.AllowEmptyWildcard)
+	yamlAddTime(cp, c.Timestamp)
+	yamlAddSeq(cp, "include-patterns", c.IncludePatterns)
+	yamlAddSeq(cp, "exclude-patterns", c.ExcludePatterns)
+	return cp
 }
 
 func (g graphState) yamlFileMkdir(m *pb.FileActionMkDir) *yaml.Node {
