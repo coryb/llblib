@@ -243,21 +243,25 @@ func yamlAddSeq(n *yaml.Node, name string, strs []string, opts ...yamlOpt) {
 
 func yamlAddOwner(n *yaml.Node, owner *pb.ChownOpt, opts ...yamlOpt) {
 	if owner != nil {
-		ownerNode := walky.NewDocumentNode()
+		ownerNode := walky.NewMappingNode()
 		yamlMapAdd(n, walky.NewStringNode("owner"),
 			applyOpts(ownerNode, opts...),
 		)
-		switch u := owner.User.User.(type) {
-		case *pb.UserOpt_ByName:
-			yamlAddKV(ownerNode, "user", u.ByName.Name)
-		case *pb.UserOpt_ByID:
-			yamlAddInt(ownerNode, "user", int64(u.ByID))
+		if owner.User != nil && owner.User.User != nil {
+			switch u := owner.User.User.(type) {
+			case *pb.UserOpt_ByName:
+				yamlAddKV(ownerNode, "user", u.ByName.Name)
+			case *pb.UserOpt_ByID:
+				yamlAddInt(ownerNode, "user", int64(u.ByID))
+			}
 		}
-		switch u := owner.Group.User.(type) {
-		case *pb.UserOpt_ByName:
-			yamlAddKV(ownerNode, "group", u.ByName.Name)
-		case *pb.UserOpt_ByID:
-			yamlAddInt(ownerNode, "group", int64(u.ByID))
+		if owner.Group != nil && owner.Group.User != nil {
+			switch u := owner.Group.User.(type) {
+			case *pb.UserOpt_ByName:
+				yamlAddKV(ownerNode, "group", u.ByName.Name)
+			case *pb.UserOpt_ByID:
+				yamlAddInt(ownerNode, "group", int64(u.ByID))
+			}
 		}
 	}
 }

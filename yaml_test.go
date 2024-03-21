@@ -150,6 +150,20 @@ func TestYAML(t *testing.T) {
 		)),
 		expected: "dockerfile",
 	}, {
+		states: states(llblib.Dockerfile(
+			[]byte(`
+				FROM busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16
+				USER nobody
+				WORKDIR /tmp
+				RUN echo hi
+			`),
+			llb.Scratch(),
+			llblib.WithTargetPlatform(&specsv1.Platform{
+				OS: "linux", Architecture: "arm64",
+			}),
+		)),
+		expected: "dockerfile-user",
+	}, {
 		states: states(
 			llb.Image("busybox", llb.LinuxAmd64).Run(
 				llb.Shlex("cat /secret"),
