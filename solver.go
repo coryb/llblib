@@ -335,7 +335,10 @@ func Download(localDir string) RequestOption {
 			Type:      client.ExporterLocal,
 			OutputDir: localDir,
 		}}
-		r.download = filesync.NewFSSyncTargetDir(localDir)
+		r.download = filesync.NewFSSyncTarget(
+			// TODO allow for multiple exports
+			filesync.WithFSSyncDir(0, localDir),
+		)
 	})
 }
 

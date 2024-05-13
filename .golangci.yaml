@@ -11,8 +11,10 @@ linters:
     - dogsled
     - dupl
     - dupword
+    - err113
     - errcheck
     - errname
+    - execinquery
     - exhaustive
     - exhaustivestruct
     - exhaustruct
@@ -28,7 +30,6 @@ linters:
     - gocyclo
     - godot
     - godox
-    - goerr113
     - gofumpt
     - golint
     - gomnd
@@ -44,6 +45,7 @@ linters:
     - maintidx
     - makezero
     - maligned
+    - mnd
     - musttag
     - nakedret
     - nestif
@@ -88,10 +90,6 @@ issues:
     - "unused-parameter:"
   max-same-issues: 0
   max-issues-per-linter: 0
-
-run:
-  skip-dirs:
-    - docs/tools/parsedoc
 
 linters-settings:
   revive:

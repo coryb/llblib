@@ -6,7 +6,7 @@ import (
 
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
 	"github.com/opencontainers/go-digest"
@@ -28,7 +28,7 @@ func newResolver(cln *client.Client, cache *resolveImageCache, sess *bksess.Sess
 	}
 }
 
-func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (string, digest.Digest, []byte, error) {
+func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
 	return r.cache.lookup(ctx, ref, opt, func() (string, digest.Digest, []byte, error) {
 		opts := client.SolveOpt{}
 		if r.sess != nil {
@@ -52,13 +52,11 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.R
 }
 
 type resolveImageCacheKey struct {
-	resolveType llb.ResolverType
-	ref         string
-	os          string
-	arch        string
-	variant     string
-	mode        string
-	store       llb.ResolveImageConfigOptStore
+	ref     string
+	os      string
+	arch    string
+	variant string
+	mode    string
 }
 
 type resolveImageCacheValue struct {
@@ -77,14 +75,12 @@ type resolveImageCache struct {
 func (r *resolveImageCache) lookup(
 	ctx context.Context,
 	ref string,
-	opt llb.ResolveImageConfigOpt,
+	opt sourceresolver.Opt,
 	resolver func() (string, digest.Digest, []byte, error),
 ) (string, digest.Digest, []byte, error) {
 	key := resolveImageCacheKey{
-		resolveType: opt.ResolverType,
-		ref:         ref,
-		mode:        opt.ResolveMode,
-		store:       opt.Store,
+		ref:  ref,
+		mode: opt.ImageOpt.ResolveMode,
 	}
 	if opt.Platform != nil {
 		key.os = opt.Platform.OS

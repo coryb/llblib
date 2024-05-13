@@ -99,7 +99,7 @@ func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOpt
 }
 
 func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (llb.State, error) {
-	state, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
+	state, _, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
 	if err != nil {
 		return llb.Scratch(), err
 	}

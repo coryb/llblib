@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const GolangCILintVersion = "v1.56.2"
+const GolangCILintVersion = "v1.58.1"
 
 func TestLint(t *testing.T) {
 	t.Parallel()
@@ -39,7 +39,7 @@ func TestLint(t *testing.T) {
 		"golangci/golangci-lint:"+GolangCILintVersion,
 		llb.Platform(currentPlatform),
 	).Run(
-		llb.Args([]string{"golangci-lint", "run", "--timeout", "3m"}),
+		llb.Args([]string{"golangci-lint", "run", "--timeout", "3m", "--fast"}),
 		// ensure go mod cache location is in our persistent cache dir
 		llb.AddEnv("GOMODCACHE", "/root/.cache/go-mod"),
 		llb.Dir(cwd),
