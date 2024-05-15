@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/util/entitlements"
 	"github.com/muesli/cancelreader"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -51,7 +52,8 @@ type ContainerOptions struct {
 	runOpts  []llb.RunOption
 	// dropErr will suppress the original build error when
 	// handling onError containers
-	dropErr bool
+	dropErr      bool
+	entitlements []entitlements.Entitlement
 }
 
 // FdReader is an io.Reader that has a Fd file descriptor.
@@ -156,6 +158,12 @@ func WithTeardown(t func() error) ContainerOption {
 }
 
 func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
+	var allowedEntitlements []entitlements.Entitlement
+	tmp := ContainerOptions{}
+	for _, opt := range opts {
+		opt.SetContainerOptions(&tmp)
+	}
+	allowedEntitlements = tmp.entitlements
 	build := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 		ei := llb.ExecInfo{
 			State: root,
@@ -163,10 +171,6 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 		// first get the run opts so we can setup defaults, then we will
 		// re-apply the container options again to the "real" ContainerOptions
 		// later
-		tmp := ContainerOptions{}
-		for _, opt := range opts {
-			opt.SetContainerOptions(&tmp)
-		}
 
 		for _, opt := range tmp.runOpts {
 			opt.SetRunOption(&ei)
@@ -216,7 +220,8 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 		return gateway.NewResult(), nil
 	}
 	return Request{
-		buildFunc: build,
+		buildFunc:    build,
+		entitlements: allowedEntitlements,
 	}
 }
 

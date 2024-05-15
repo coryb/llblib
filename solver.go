@@ -318,10 +318,16 @@ func WithLabel(l string) RequestOption {
 
 // WithInsecure will modify the request to ensure the solve request has
 // the `Insecure` entitlement provided.
-func WithInsecure() RequestOption {
-	return requestOptionFunc(func(r *Request) {
-		r.entitlements = append(r.entitlements, entitlements.EntitlementSecurityInsecure)
-	})
+type WithInsecure struct{}
+
+// SetRequestOption implements RequestOption
+func (WithInsecure) SetRequestOption(r *Request) {
+	r.entitlements = append(r.entitlements, entitlements.EntitlementSecurityInsecure)
+}
+
+// SetContainerOptions implements ContainerOption
+func (WithInsecure) SetContainerOptions(co *ContainerOptions) {
+	co.entitlements = append(co.entitlements, entitlements.EntitlementSecurityInsecure)
 }
 
 // Download will trigger the buildkit exporter to export the solved state to the
