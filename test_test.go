@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
@@ -72,7 +73,7 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 func (r testRunner) Run(t *testing.T, req llblib.Request) error {
 	t.Helper()
 	_, err := r.Session(t).Do(r.Context, req)
-	return err
+	return errtrace.Wrap(err)
 }
 
 func (r testRunner) Session(t *testing.T) llblib.Session {
@@ -113,9 +114,9 @@ func newTestWriter(t testing.TB) io.WriteCloser {
 func (w *tWriter) Close() error {
 	w.writer.Close()
 	<-w.done
-	return w.reader.Close()
+	return errtrace.Wrap(w.reader.Close())
 }
 
 func (w tWriter) Write(p []byte) (n int, err error) {
-	return w.writer.Write(p)
+	return errtrace.Wrap2(w.writer.Write(p))
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
@@ -29,7 +30,7 @@ func newResolver(cln *client.Client, cache *resolveImageCache, sess *bksess.Sess
 }
 
 func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
-	return r.cache.lookup(ctx, ref, opt, func() (string, digest.Digest, []byte, error) {
+	return errtrace.Wrap4(r.cache.lookup(ctx, ref, opt, func() (string, digest.Digest, []byte, error) {
 		opts := client.SolveOpt{}
 		if r.sess != nil {
 			opts.SharedSession = r.sess
@@ -45,10 +46,10 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourc
 			return nil, nil
 		}, r.prog.Channel())
 		if buildErr != nil {
-			return "", "", nil, buildErr
+			return "", "", nil, errtrace.Wrap(buildErr)
 		}
-		return ref, d, config, err
-	})
+		return ref, d, config, errtrace.Wrap(err)
+	}))
 }
 
 type resolveImageCacheKey struct {
@@ -102,18 +103,18 @@ func (r *resolveImageCache) lookup(
 	}
 	r.mu.Unlock()
 	if ok {
-		return val.fetch(ctx)
+		return errtrace.Wrap4(val.fetch(ctx))
 	}
 	val.store(resolver())
-	return val.fetch(ctx)
+	return errtrace.Wrap4(val.fetch(ctx))
 }
 
 func (v *resolveImageCacheValue) fetch(ctx context.Context) (string, digest.Digest, []byte, error) {
 	select {
 	case <-ctx.Done():
-		return "", "", nil, ctx.Err()
+		return "", "", nil, errtrace.Wrap(ctx.Err())
 	case <-v.inflight:
-		return v.ref, v.digest, v.config, v.err
+		return v.ref, v.digest, v.config, errtrace.Wrap(v.err)
 	}
 }
 

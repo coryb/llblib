@@ -2,15 +2,16 @@ package llblib
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/llblib/sockproxy"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/opencontainers/go-digest"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -60,7 +61,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 
 	srcURL, err := url.Parse(src)
 	if err != nil {
-		s.err = errors.Wrapf(err, "unable to parse source for forward: %s", src)
+		s.err = errtrace.Errorf("unable to parse source for forward: %s: %w", src, err)
 		return noop
 	}
 
@@ -77,7 +78,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		}
 		_, err = os.Stat(filepath.Dir(localPath))
 		if err != nil {
-			s.err = errors.Wrapf(err, "error reading directory for forward: %s", localPath)
+			s.err = errtrace.Errorf("error reading directory for forward: %s: %w", localPath, err)
 			return noop
 		}
 		if id == "" {
@@ -97,7 +98,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		helper := func(ctx context.Context) (release func() error, err error) {
 			dir, err := os.MkdirTemp("", "forward")
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to create tmp dir for forwarding sock")
+				return nil, errtrace.Errorf("failed to create tmp dir for forwarding sock: %w", err)
 			}
 
 			localPath = filepath.Join(dir, "proxy.sock")
@@ -113,15 +114,15 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 				var dialer net.Dialer
 				conn, err := dialer.DialContext(ctx, srcURL.Scheme, srcURL.Host)
 				if err != nil {
-					return nil, errors.Wrapf(err, "cannot dial %s", src)
+					return nil, errtrace.Errorf("cannot dial %s: %w", src, err)
 				}
-				return conn, err
+				return conn, errtrace.Wrap(err)
 			}
 
 			var lc net.ListenConfig
 			l, err := lc.Listen(ctx, "unix", localPath)
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to listen on forwarding sock")
+				return nil, errtrace.Errorf("failed to listen on forwarding sock: %w", err)
 			}
 
 			var g errgroup.Group
@@ -134,16 +135,16 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 
 				err := l.Close()
 				if err != nil && !errors.Is(err, net.ErrClosed) {
-					return errors.Wrap(err, "failed to close listener")
+					return errtrace.Errorf("failed to close listener: %w", err)
 				}
 
-				return g.Wait()
+				return errtrace.Wrap(g.Wait())
 			}
 
 			g.Go(func() error {
 				err := sockproxy.Run(l, dialerFunc)
 				if err != nil && !errors.Is(err, net.ErrClosed) {
-					return err
+					return errtrace.Wrap(err)
 				}
 				return nil
 			})
@@ -153,7 +154,7 @@ func (s *solver) Forward(src, dest string, opts ...ForwardOption) llb.RunOption 
 		s.helpers = append(s.helpers, helper)
 		s.mu.Unlock()
 	default:
-		s.err = errors.Errorf("unsupported forward scheme %q in %q", srcURL.Scheme, src)
+		s.err = errtrace.Errorf("unsupported forward scheme %q in %q", srcURL.Scheme, src)
 		return noop
 	}
 

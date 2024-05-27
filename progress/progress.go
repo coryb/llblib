@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
 )
@@ -105,14 +106,14 @@ func (p *progress) Close() error {
 		p.childCond.Wait()
 	}
 	close(p.statusCh)
-	return <-p.done
+	return errtrace.Wrap(<-p.done)
 }
 
 func (p *progress) Sync() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := p.sync(); err != nil {
-		return err
+		return errtrace.Wrap(err)
 	}
 	p.start()
 	return nil
@@ -123,7 +124,7 @@ func (p *progress) Sync() error {
 func (p *progress) sync() error {
 	close(p.statusCh)
 	if err := <-p.done; err != nil {
-		return err
+		return errtrace.Wrap(err)
 	}
 	// we are sync'd so lets restart
 	p.done = make(chan error)
@@ -133,7 +134,7 @@ func (p *progress) sync() error {
 
 func (p *progress) Pause() error {
 	p.mu.Lock()
-	return p.sync()
+	return errtrace.Wrap(p.sync())
 }
 
 func (p *progress) Resume() {

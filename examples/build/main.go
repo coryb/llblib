@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
@@ -118,7 +119,7 @@ func main() {
 		r := r
 		eg.Go(func() error {
 			_, err := sess.Do(ctx, r)
-			return err
+			return errtrace.Wrap(err)
 		})
 	}
 	err = eg.Wait()
