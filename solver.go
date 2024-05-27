@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
 	"github.com/coryb/llblib/sockproxy"
 	"github.com/docker/cli/cli/config"
@@ -23,7 +24,6 @@ import (
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/opencontainers/go-digest"
-	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
 	fstypes "github.com/tonistiigi/fsutil/types"
 	"golang.org/x/exp/maps"
@@ -146,7 +146,7 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 
 	fi, err := os.Stat(absPath)
 	if err != nil {
-		s.err = errors.Wrapf(err, "error reading %q", absPath)
+		s.err = errtrace.Errorf("error reading %q: %w", absPath, err)
 		return llb.Scratch()
 	}
 
@@ -166,7 +166,7 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 	if li.LocalUniqueID == "" {
 		id, err := localID(absPath, opts...)
 		if err != nil {
-			s.err = errors.Wrap(err, "error calculating id for local")
+			s.err = errtrace.Errorf("error calculating id for local: %w", err)
 			return llb.Scratch()
 		}
 		opts = append(opts, llb.LocalUniqueID(id))
@@ -190,14 +190,14 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 func localID(absPath string, opts ...llb.LocalOption) (string, error) {
 	uniqID, err := localUniqueID(absPath, opts...)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to calculate ID for local")
+		return "", errtrace.Errorf("failed to calculate ID for local: %w", err)
 	}
 	opts = append(opts, llb.LocalUniqueID(uniqID))
 	st := llb.Local("", opts...)
 
 	def, err := st.Marshal(context.Background())
 	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal local state for ID")
+		return "", errtrace.Errorf("failed to marshal local state for ID: %w", err)
 	}
 
 	// The terminal op of the graph def.Def[len(def.Def)-1] is an empty vertex with
@@ -219,7 +219,7 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 
 	fi, err := os.Stat(localPath)
 	if err != nil {
-		return "", err
+		return "", errtrace.Wrap(err)
 	}
 
 	lastModified := fi.ModTime()
@@ -232,17 +232,17 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 		var walkOpts fsutil.FilterOpt
 		if localInfo.IncludePatterns != "" {
 			if err := json.Unmarshal([]byte(localInfo.IncludePatterns), &walkOpts.IncludePatterns); err != nil {
-				return "", errors.Wrap(err, "failed to unmarshal IncludePatterns for localUniqueID")
+				return "", errtrace.Errorf("failed to unmarshal IncludePatterns for localUniqueID: %w", err)
 			}
 		}
 		if localInfo.ExcludePatterns != "" {
 			if err := json.Unmarshal([]byte(localInfo.ExcludePatterns), &walkOpts.ExcludePatterns); err != nil {
-				return "", errors.Wrap(err, "failed to unmarshal ExcludePatterns for localUniqueID")
+				return "", errtrace.Errorf("failed to unmarshal ExcludePatterns for localUniqueID: %w", err)
 			}
 		}
 		if localInfo.FollowPaths != "" {
 			if err := json.Unmarshal([]byte(localInfo.FollowPaths), &walkOpts.FollowPaths); err != nil {
-				return "", errors.Wrap(err, "failed to unmarshal FollowPaths for localUniqueID")
+				return "", errtrace.Errorf("failed to unmarshal FollowPaths for localUniqueID: %w", err)
 			}
 		}
 
@@ -253,7 +253,7 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 			return nil
 		})
 		if err != nil {
-			return "", err
+			return "", errtrace.Wrap(err)
 		}
 	}
 
@@ -381,12 +381,12 @@ func (cw *aliveConnWaiter) Read(b []byte) (n int, err error) {
 	defer cw.aliveOnce.Do(func() {
 		close(cw.alive)
 	})
-	return cw.Conn.Read(b)
+	return errtrace.Wrap2(cw.Conn.Read(b))
 }
 
 func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error) {
 	if s.err != nil {
-		return nil, errors.Wrap(s.err, "solver in error state, cannot proceed")
+		return nil, errtrace.Errorf("solver in error state, cannot proceed: %w", s.err)
 	}
 
 	s.mu.Lock()
@@ -396,7 +396,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	for _, helper := range s.helpers {
 		release, err := helper(ctx)
 		if err != nil {
-			return nil, errors.Wrap(err, "solver helper failed")
+			return nil, errtrace.Errorf("solver helper failed: %w", err)
 		}
 		releasers = append(releasers, release)
 	}
@@ -407,7 +407,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		for name, localDir := range s.localDirs {
 			dirSourceFS, err := fsutil.NewFS(localDir)
 			if err != nil {
-				return nil, err
+				return nil, errtrace.Wrap(err)
 			}
 			dirSourceFS, err = fsutil.NewFilterFS(dirSourceFS, &fsutil.FilterOpt{
 				Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
@@ -417,7 +417,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 				},
 			})
 			if err != nil {
-				return nil, err
+				return nil, errtrace.Wrap(err)
 			}
 			dirSource[name] = dirSourceFS
 		}
@@ -428,7 +428,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	if len(s.secrets) > 0 {
 		fileStore, err := secretsprovider.NewStore(maps.Values(s.secrets))
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 		attachables = append(attachables, secretsprovider.NewSecretProvider(fileStore))
 	}
@@ -437,7 +437,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	if len(s.agentConfigs) > 0 {
 		sp, err := sockproxy.NewProvider(maps.Values(s.agentConfigs))
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to create provider for forward")
+			return nil, errtrace.Errorf("failed to create provider for forward: %w", err)
 		}
 		attachables = append(attachables, sp)
 	}
@@ -448,7 +448,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	bkSess, err := bksess.NewSession(ctx, "llblib", "")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create buildkit session")
+		return nil, errtrace.Errorf("failed to create buildkit session: %w", err)
 	}
 	for _, a := range attachables {
 		bkSess.Allow(a)
@@ -457,14 +457,14 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	go func() {
 		bkSess.Run(ctx, func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
 			conn, err := cln.Dialer()(ctx, proto, meta)
-			return &aliveConnWaiter{Conn: conn, alive: waiter}, err
+			return &aliveConnWaiter{Conn: conn, alive: waiter}, errtrace.Wrap(err)
 		})
 	}()
 
 	// ensure session is running
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, errtrace.Wrap(ctx.Err())
 	case <-waiter:
 	}
 

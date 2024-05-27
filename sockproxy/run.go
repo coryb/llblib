@@ -3,6 +3,8 @@ package sockproxy
 import (
 	"io"
 	"net"
+
+	"braces.dev/errtrace"
 )
 
 // Run will start the proxy.  This must be done before using the
@@ -12,11 +14,11 @@ func Run(l net.Listener, dialer func() (net.Conn, error)) error {
 	for {
 		proxy, err := l.Accept()
 		if err != nil {
-			return err
+			return errtrace.Wrap(err)
 		}
 		conn, err := dialer()
 		if err != nil {
-			return err
+			return errtrace.Wrap(err)
 		}
 
 		go func() {

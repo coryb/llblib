@@ -3,15 +3,16 @@ package llblib
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"braces.dev/errtrace"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -35,7 +36,7 @@ import (
 func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
 	cln, err := newClient(ctx, addr, opts...)
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err)
 	}
 
 	_, err = cln.Info(ctx)
@@ -46,14 +47,14 @@ func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 	// Info API added in v0.11
 	if !ErrUnimplemented(err) {
 		cln.Close()
-		return nil, errors.Wrapf(err, "unable to connect to buildkitd")
+		return nil, errtrace.Errorf("unable to connect to buildkitd: %w", err)
 	}
 
 	// If we are still here then Info is Unimplemented, so fallback to
 	// ListWorkers which can be a bit slower
 	if _, err := cln.ListWorkers(ctx); err != nil {
 		cln.Close()
-		return nil, errors.Wrap(err, "unable to connect to buildkitd")
+		return nil, errtrace.Errorf("unable to connect to buildkitd: %w", err)
 	}
 	return cln, nil
 }
@@ -72,12 +73,12 @@ func ErrUnimplemented(err error) bool {
 
 func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
 	if addr != "" && !strings.HasPrefix(addr, "docker://") {
-		return client.New(ctx, addr, opts...)
+		return errtrace.Wrap2(client.New(ctx, addr, opts...))
 	}
 
 	host, err := DockerHost(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to determine docker host")
+		return nil, errtrace.Errorf("unable to determine docker host: %w", err)
 	}
 	// no address, attempt to use docker built-in buildkit
 	dc, err := dockerclient.NewClientWithOpts(
@@ -85,14 +86,14 @@ func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 		dockerclient.WithAPIVersionNegotiation(),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "buildkitd address empty and failed to connect to docker")
+		return nil, errtrace.Errorf("buildkitd address empty and failed to connect to docker: %w", err)
 	}
 	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-		return dc.DialHijack(ctx, "/grpc", "h2c", nil)
+		return errtrace.Wrap2(dc.DialHijack(ctx, "/grpc", "h2c", nil))
 	}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
-		return dc.DialHijack(ctx, "/session", proto, meta)
+		return errtrace.Wrap2(dc.DialHijack(ctx, "/session", proto, meta))
 	}))
-	return client.New(ctx, "", opts...)
+	return errtrace.Wrap2(client.New(ctx, "", opts...))
 }
 
 // DockerDir returns the path to the user's Docker config dir.
@@ -140,11 +141,11 @@ func DockerHost(ctx context.Context) (string, error) {
 		if errors.Is(err, fs.ErrNotExist) {
 			return dockerclient.DefaultDockerHost, nil
 		}
-		return "", errors.Wrapf(err, "reading %s", dockerConfigPath)
+		return "", errtrace.Errorf("reading %s: %w", dockerConfigPath, err)
 	}
 
 	if err := json.Unmarshal(configBytes, &dockerConfig); err != nil {
-		return "", errors.Wrapf(err, "invalid json in %s", dockerConfigPath)
+		return "", errtrace.Errorf("invalid json in %s: %w", dockerConfigPath, err)
 	}
 
 	if dockerConfig.CurrentContext != "" {
@@ -152,7 +153,7 @@ func DockerHost(ctx context.Context) (string, error) {
 		contextDir := filepath.Join(dockerDir, "contexts")
 		err := filepath.WalkDir(contextDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
-				return err
+				return errtrace.Wrap(err)
 			}
 			if contextHost != "" ||
 				d.IsDir() ||
@@ -170,10 +171,10 @@ func DockerHost(ctx context.Context) (string, error) {
 			}
 			contextBytes, err := os.ReadFile(path)
 			if err != nil {
-				return err
+				return errtrace.Wrap(err)
 			}
 			if err := json.Unmarshal(contextBytes, &dockerContext); err != nil {
-				return errors.Wrapf(err, "failed to unmarshal %s", path)
+				return errtrace.Errorf("failed to unmarshal %s: %w", path, err)
 			}
 			if dockerContext.Name == dockerConfig.CurrentContext {
 				contextHost = dockerContext.Endpoints.Docker.Host
@@ -181,7 +182,7 @@ func DockerHost(ctx context.Context) (string, error) {
 			return nil
 		})
 		if err != nil {
-			return "", errors.Wrapf(err, "failed to walk docker contexts dir: %s", contextDir)
+			return "", errtrace.Errorf("failed to walk docker contexts dir: %s: %w", contextDir, err)
 		}
 		if contextHost != "" {
 			return contextHost, nil

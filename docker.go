@@ -4,6 +4,7 @@ import (
 	"context"
 	"path"
 
+	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
@@ -88,20 +89,20 @@ func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOpt
 			opt.SetDockerfileOption(&docOpts)
 		}
 		if source, _, _, ok := parser.DetectSyntax(dockerfile); ok {
-			return frontendDockerfileSolve(source, dockerfile, docOpts)
+			return errtrace.Wrap2(frontendDockerfileSolve(source, dockerfile, docOpts))
 		}
 		if len(docOpts.buildContexts) > 0 {
 			// we cannot use the direct solve if we have additional inputs
-			return frontendDockerfileSolve("dockerfile.v0", dockerfile, docOpts)
+			return errtrace.Wrap2(frontendDockerfileSolve("dockerfile.v0", dockerfile, docOpts))
 		}
-		return directSolve(ctx, dockerfile, docOpts.DockerfileOpts)
+		return errtrace.Wrap2(directSolve(ctx, dockerfile, docOpts.DockerfileOpts))
 	})
 }
 
 func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (llb.State, error) {
 	state, _, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
 	if err != nil {
-		return llb.Scratch(), err
+		return llb.Scratch(), errtrace.Wrap(err)
 	}
 	return *state, nil
 }

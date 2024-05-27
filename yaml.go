@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/walky"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
-	"github.com/pkg/errors"
 	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
@@ -34,12 +34,12 @@ func ToYAML(ctx context.Context, states ...llb.State) (*yaml.Node, error) {
 	for _, st := range states {
 		def, err := st.Marshal(ctx)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal state")
+			return nil, errtrace.Errorf("failed to marshal state: %w", err)
 		}
 
 		root, g, err := g.newGraph(def.ToPB())
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 		if root == nil {
 			// no error, so we must be solving llb.Scratch()
@@ -49,7 +49,7 @@ func ToYAML(ctx context.Context, states ...llb.State) (*yaml.Node, error) {
 
 		node, err := g.visit(root)
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 
 		if root.Index > 0 {
@@ -111,7 +111,7 @@ func (g graphState) newGraph(def *pb.Definition) (*pb.Input, graphState, error) 
 	for _, dt := range def.Def {
 		var pbOp pb.Op
 		if err := (&pbOp).Unmarshal(dt); err != nil {
-			return nil, graphState{}, err
+			return nil, graphState{}, errtrace.Wrap(err)
 		}
 		dgst = digest.FromBytes(dt)
 		ops[dgst] = &pbOp
@@ -319,7 +319,7 @@ func (g graphState) visit(input *pb.Input) (node *yaml.Node, err error) {
 
 	op := g.ops[input.Digest]
 	if op == nil {
-		return nil, errors.Errorf("op %s not found", input.Digest)
+		return nil, errtrace.Errorf("op %s not found", input.Digest)
 	}
 
 	// any op can have filter constraints, so defer apply them to the
@@ -336,7 +336,7 @@ func (g graphState) visit(input *pb.Input) (node *yaml.Node, err error) {
 	case *pb.Op_Exec:
 		node, err := g.yamlExecOp(op, v.Exec)
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 		yamlAddBool(node, "ignore-cache", g.meta[input.Digest].IgnoreCache)
 		return node, nil
@@ -347,17 +347,17 @@ func (g graphState) visit(input *pb.Input) (node *yaml.Node, err error) {
 				fmt.Sprintf("%s/%s", op.Platform.OS, op.Platform.Architecture),
 			)
 		}
-		return node, err
+		return node, errtrace.Wrap(err)
 	case *pb.Op_File:
-		return g.yamlFileOp(input.Digest, op, v.File)
+		return errtrace.Wrap2(g.yamlFileOp(input.Digest, op, v.File))
 	case *pb.Op_Build:
-		return g.yamlBuildOp(op, v.Build)
+		return errtrace.Wrap2(g.yamlBuildOp(op, v.Build))
 	case *pb.Op_Merge:
-		return g.yamlMergeOp(op, v.Merge)
+		return errtrace.Wrap2(g.yamlMergeOp(op, v.Merge))
 	case *pb.Op_Diff:
-		return g.yamlDiffOp(op, v.Diff)
+		return errtrace.Wrap2(g.yamlDiffOp(op, v.Diff))
 	default:
-		return nil, errors.Errorf("unexpected op type %T", op.Op)
+		return nil, errtrace.Errorf("unexpected op type %T", op.Op)
 	}
 }
 
@@ -420,7 +420,7 @@ func (g graphState) yamlExecOp(op *pb.Op, e *pb.ExecOp) (*yaml.Node, error) {
 	for _, m := range e.Mounts {
 		mountNode, err := g.yamlMount(op, m)
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 		walky.AppendNode(mounts, mountNode)
 	}
@@ -472,12 +472,12 @@ func (g graphState) yamlMount(op *pb.Op, m *pb.Mount) (*yaml.Node, error) {
 		return mount, nil
 	}
 	if int(m.Input) >= len(op.Inputs) {
-		return nil, errors.Errorf("invalid op, impossible input %d from op with %d inputs", m.Input, len(op.Inputs))
+		return nil, errtrace.Errorf("invalid op, impossible input %d from op with %d inputs", m.Input, len(op.Inputs))
 	}
 
 	input, err := g.visit(op.Inputs[m.Input])
 	if err != nil {
-		return nil, errors.Wrapf(err, "visiting mount %s", m.Dest)
+		return nil, errtrace.Errorf("visiting mount %s: %w", m.Dest, err)
 	}
 	yamlMapAdd(mount, walky.NewStringNode("input"), input)
 	return mount, nil
@@ -510,10 +510,10 @@ func (g graphState) yamlFileOp(dgst digest.Digest, op *pb.Op, f *pb.FileOp) (*ya
 		case *pb.FileAction_Rm:
 			action = g.yamlFileRm(a.Rm)
 		default:
-			err = errors.Errorf("unexpected file action type %T", a)
+			err = errtrace.Errorf("unexpected file action type %T", a)
 		}
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 		inputName := "input"
 		if act.SecondaryInput >= 0 {
@@ -526,7 +526,7 @@ func (g graphState) yamlFileOp(dgst digest.Digest, op *pb.Op, f *pb.FileOp) (*ya
 		case int(act.Input) < len(op.Inputs):
 			input, err := g.visit(op.Inputs[act.Input])
 			if err != nil {
-				return nil, errors.Wrap(err, "visiting copy input")
+				return nil, errtrace.Errorf("visiting copy input: %w", err)
 			}
 			yamlMapAdd(action, walky.NewStringNode(inputName), input)
 		default:
@@ -537,7 +537,7 @@ func (g graphState) yamlFileOp(dgst digest.Digest, op *pb.Op, f *pb.FileOp) (*ya
 		if act.SecondaryInput >= 0 {
 			input, err := g.visit(op.Inputs[act.SecondaryInput])
 			if err != nil {
-				return nil, errors.Wrap(err, "visiting copy source input")
+				return nil, errtrace.Errorf("visiting copy source input: %w", err)
 			}
 			yamlMapAdd(action, walky.NewStringNode("src-input"), input)
 		}
@@ -606,7 +606,7 @@ func (g graphState) yamlBuildOp(op *pb.Op, b *pb.BuildOp) (*yaml.Node, error) {
 	} else {
 		source, err := g.visit(op.Inputs[b.Builder])
 		if err != nil {
-			return nil, errors.Wrap(err, "visiting buildOp source")
+			return nil, errtrace.Errorf("visiting buildOp source: %w", err)
 		}
 		yamlMapAdd(node, walky.NewStringNode("source"), source)
 	}
@@ -620,7 +620,7 @@ func (g graphState) yamlBuildOp(op *pb.Op, b *pb.BuildOp) (*yaml.Node, error) {
 		} else {
 			input, err := g.visit(op.Inputs[b.Inputs[name].Input])
 			if err != nil {
-				return nil, errors.Wrapf(err, "visiting buildOp input %s", name)
+				return nil, errtrace.Errorf("visiting buildOp input %s: %w", name, err)
 			}
 			yamlMapAdd(inputs, walky.NewStringNode(name), input)
 		}
@@ -628,11 +628,11 @@ func (g graphState) yamlBuildOp(op *pb.Op, b *pb.BuildOp) (*yaml.Node, error) {
 
 	buildInput, buildGraph, err := g.newGraph(b.Def)
 	if err != nil {
-		return nil, errors.Wrap(err, "building graph for buildOp")
+		return nil, errtrace.Errorf("building graph for buildOp: %w", err)
 	}
 	build, err := buildGraph.visit(buildInput)
 	if err != nil {
-		return nil, errors.Wrap(err, "visiting build for buildOp")
+		return nil, errtrace.Errorf("visiting build for buildOp: %w", err)
 	}
 	yamlMapAdd(node, walky.NewStringNode("build"), build)
 	return node, nil
@@ -650,7 +650,7 @@ func (g graphState) yamlMergeOp(op *pb.Op, m *pb.MergeOp) (*yaml.Node, error) {
 			} else {
 				input, err := g.visit(op.Inputs[inputIx.Input])
 				if err != nil {
-					return nil, errors.Wrapf(err, "visiting merge input %d", inputIx.Input)
+					return nil, errtrace.Errorf("visiting merge input %d: %w", inputIx.Input, err)
 				}
 				walky.AppendNode(inputs, input)
 			}
@@ -663,20 +663,20 @@ func (g graphState) yamlDiffOp(op *pb.Op, d *pb.DiffOp) (*yaml.Node, error) {
 	node := walky.NewMappingNode()
 	yamlAddKV(node, "type", "DIFF")
 	if d.Lower.Input < 0 || int(d.Lower.Input) >= len(op.Inputs) {
-		return nil, errors.Errorf("invalid diff op, lower index %d of with %d inputs", d.Lower.Input, len(op.Inputs))
+		return nil, errtrace.Errorf("invalid diff op, lower index %d of with %d inputs", d.Lower.Input, len(op.Inputs))
 	}
 	lower, err := g.visit(op.Inputs[d.Lower.Input])
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err)
 	}
 	yamlMapAdd(node, walky.NewStringNode("lower"), lower)
 
 	if d.Upper.Input < 0 || int(d.Upper.Input) >= len(op.Inputs) {
-		return nil, errors.Errorf("invalid diff op, upper index %d of with %d inputs", d.Upper.Input, len(op.Inputs))
+		return nil, errtrace.Errorf("invalid diff op, upper index %d of with %d inputs", d.Upper.Input, len(op.Inputs))
 	}
 	upper, err := g.visit(op.Inputs[d.Upper.Input])
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err)
 	}
 	yamlMapAdd(node, walky.NewStringNode("upper"), upper)
 	return node, nil

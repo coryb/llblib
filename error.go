@@ -2,12 +2,13 @@ package llblib
 
 import (
 	"context"
+	"errors"
 
+	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
-	"github.com/pkg/errors"
 )
 
 // DropBuildError will cause OnError handlers to suppress the original error
@@ -41,7 +42,7 @@ func OnError(opts ...ContainerOption) RequestOption {
 			}
 			var se *errdefs.SolveError
 			if errors.As(err, &se) {
-				return co.dropErr, errContainer(ctx, c, se, opts...)
+				return co.dropErr, errtrace.Wrap(errContainer(ctx, c, se, opts...))
 			}
 			return false, nil // the original error is handled externally
 		}
@@ -78,7 +79,7 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 
 	op, err := opFromInfo(ctx, ei)
 	if err != nil {
-		return errors.Wrap(err, "failed to extract op from exec info")
+		return errtrace.Errorf("failed to extract op from exec info: %w", err)
 	}
 
 	mergeExecOp(se.Op.GetExec(), op.GetExec())
@@ -89,14 +90,14 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 			if st, ok := mountStates[m.Dest]; ok && m.MountType == pb.MountType_BIND {
 				def, err := st.Marshal(ctx)
 				if err != nil {
-					return errors.Wrapf(err, "failed to mount state for %s", m.Dest)
+					return errtrace.Errorf("failed to mount state for %s: %w", m.Dest, err)
 				}
 
 				r, err := c.Solve(ctx, gateway.SolveRequest{
 					Definition: def.ToPB(),
 				})
 				if err != nil {
-					return errors.Wrapf(err, "failed to solve mount state for %s", m.Dest)
+					return errtrace.Errorf("failed to solve mount state for %s: %w", m.Dest, err)
 				}
 				containerOpts.Mounts[i].Ref = r.Ref
 			}
@@ -108,5 +109,5 @@ func errContainer(ctx context.Context, c gateway.Client, se *errdefs.SolveError,
 	for _, opt := range opts {
 		opt.SetContainerOptions(containerOpts)
 	}
-	return runContainer(ctx, c, containerOpts)
+	return errtrace.Wrap(runContainer(ctx, c, containerOpts))
 }

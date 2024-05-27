@@ -2,17 +2,17 @@ package llblib
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 	"fmt"
 	"io"
 	"syscall"
 
+	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/muesli/cancelreader"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/term"
 )
@@ -85,10 +85,10 @@ func WithTTY(in FdReader, outW, errW io.Writer) ContainerOption {
 		co.Setup = append(co.Setup, func(ctx context.Context) error {
 			oldState, err := term.MakeRaw(int(in.Fd()))
 			if err != nil {
-				return errors.Wrap(err, "failed to set terminal input to raw mode")
+				return errtrace.Errorf("failed to set terminal input to raw mode: %w", err)
 			}
 			co.Teardown = append(co.Teardown, func() error {
-				return term.Restore(int(in.Fd()), oldState)
+				return errtrace.Wrap(term.Restore(int(in.Fd()), oldState))
 			})
 			co.Teardown = append(co.Teardown, func() error {
 				inReader.Cancel()
@@ -178,7 +178,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 
 		op, err := opFromInfo(ctx, ei)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to create exec from run options")
+			return nil, errtrace.Errorf("failed to create exec from run options: %w", err)
 		}
 
 		containerOpts := containerFromOp(op)
@@ -195,7 +195,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 			if st, ok := mountStates[m.Dest]; ok && m.MountType == pb.MountType_BIND {
 				def, err := st.Marshal(ctx)
 				if err != nil {
-					return nil, errors.Wrapf(err, "failed to mount state for %s", m.Dest)
+					return nil, errtrace.Errorf("failed to mount state for %s: %w", m.Dest, err)
 				}
 
 				r, err := c.Solve(ctx, gateway.SolveRequest{
@@ -203,7 +203,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 					Definition: def.ToPB(),
 				})
 				if err != nil {
-					return nil, errors.Wrapf(err, "failed to solve mount state for %s", m.Dest)
+					return nil, errtrace.Errorf("failed to solve mount state for %s: %w", m.Dest, err)
 				}
 				ref = r.Ref
 			}
@@ -215,7 +215,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 		}
 
 		if err := runContainer(ctx, c, containerOpts); err != nil {
-			return nil, errors.Wrap(err, "failed to run container")
+			return nil, errtrace.Errorf("failed to run container: %w", err)
 		}
 		return gateway.NewResult(), nil
 	}
@@ -228,7 +228,7 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) error {
 	ctr, err := c.NewContainer(ctx, co.NewContainerRequest)
 	if err != nil {
-		return errors.Wrap(err, "failed to create breakpoint container")
+		return errtrace.Errorf("failed to create breakpoint container: %w", err)
 	}
 	defer ctr.Release(context.Background())
 
@@ -238,7 +238,7 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 
 	proc, err := ctr.Start(ctx, co.StartRequest)
 	if err != nil {
-		return errors.Wrap(err, "failed to start breakpoint process")
+		return errtrace.Errorf("failed to start breakpoint process: %w", err)
 	}
 
 	LoadProgress(ctx).Pause()
@@ -246,7 +246,7 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 
 	for _, f := range co.Setup {
 		if err := f(ctx); err != nil {
-			return errors.Wrap(err, "setup failed before container process created")
+			return errtrace.Errorf("setup failed before container process created: %w", err)
 		}
 	}
 
@@ -255,11 +255,11 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 		var err error
 		for _, f := range co.Teardown {
 			if tearErr := f(); err != nil {
-				err = goerrors.Join(err, tearErr)
+				err = errors.Join(err, tearErr)
 			}
 		}
 		if err != nil {
-			return errors.Wrap(err, "teardown failed after container exit")
+			return errtrace.Errorf("teardown failed after container exit: %w", err)
 		}
 		return nil
 	})
@@ -272,7 +272,7 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 					return nil
 				case winsize := <-co.Resize:
 					if err := proc.Resize(ctx, winsize); err != nil {
-						return errors.Wrap(err, "failed to send resize to process")
+						return errtrace.Errorf("failed to send resize to process: %w", err)
 					}
 				}
 			}
@@ -287,7 +287,7 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 					return nil
 				case sig := <-co.Signal:
 					if err := proc.Signal(ctx, sig); err != nil {
-						return errors.Wrap(err, "failed to send signal to process")
+						return errtrace.Errorf("failed to send signal to process: %w", err)
 					}
 				}
 			}
@@ -295,11 +295,11 @@ func runContainer(ctx context.Context, c gateway.Client, co *ContainerOptions) e
 	}
 
 	if err := proc.Wait(); err != nil {
-		return errors.Wrapf(err, "container process failed")
+		return errtrace.Errorf("container process failed: %w", err)
 	}
 	cancel()
 	if err := eg.Wait(); err != nil {
-		return errors.Wrapf(err, "container process event error")
+		return errtrace.Errorf("container process event error: %w", err)
 	}
 	return nil
 }
@@ -313,12 +313,12 @@ func opFromInfo(ctx context.Context, ei llb.ExecInfo) (*pb.Op, error) {
 
 	_, dt, _, _, err := execOp.Marshal(ctx, &ei.Constraints)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal exec op")
+		return nil, errtrace.Errorf("failed to marshal exec op: %w", err)
 	}
 
 	pbOp := pb.Op{}
 	if err := pbOp.Unmarshal(dt); err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal execOp definition")
+		return nil, errtrace.Errorf("failed to unmarshal execOp definition: %w", err)
 	}
 	pbExec := pbOp.GetExec()
 	applyExecInfo(pbExec, ei)
