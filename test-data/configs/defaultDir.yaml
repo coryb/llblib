@@ -1,0 +1,23 @@
+architecture: amd64
+config:
+    Cmd:
+        - /bin/sh
+    Env:
+        - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    WorkingDir: /tmp
+created: "0001-01-01T00:00:00Z"
+history:
+    - created: "2024-05-22T18:18:11.872913732Z"
+      created_by: '/bin/sh -c #(nop) ADD file:e3abcdba177145039cfef1ad882f9f81a612a24c9f044b19f713b95454d2e3f6 in / '
+    - created: "2024-05-22T18:18:12.052034407Z"
+      created_by: '/bin/sh -c #(nop)  CMD ["/bin/sh"]'
+      empty_layer: true
+    - comment: llblib.v0
+      created: "0001-01-01T00:00:00Z"
+      created_by: WORKDIR /tmp
+      empty_layer: true
+os: linux
+rootfs:
+    diff_ids:
+        - sha256:02f2bcb26af5ea6d185dcf509dc795746d907ae10c53918b6944ac85447a0c72
+    type: layers

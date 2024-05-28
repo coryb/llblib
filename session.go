@@ -2,16 +2,24 @@ package llblib
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	// ExporterImageConfigKey is the key used to store the image config in the
+	// client.SolveResponse.ExporterResponse returned from Session.Do.
+	ExporterImageConfigKey = "llblib.containerimage.config"
 )
 
 // Session provides a long running session used to solve requests.
@@ -31,6 +39,7 @@ type session struct {
 	attachables []bksess.Attachable
 	releasers   []func() error
 	client      *client.Client
+	isMoby      bool
 	resolver    *resolver
 	progress    progress.Progress
 }
@@ -92,12 +101,25 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		return res, nil
 	}
 
-	solveOpt.Exports = req.exports
 	def, err := req.state.Marshal(ctx)
 	if err != nil {
 		return nil, errtrace.Errorf("failed to marshal state: %w", err)
 	}
 
+	solveOpt.Exports = slices.Clone(req.exports)
+	if s.isMoby {
+		for i, export := range solveOpt.Exports {
+			if export.Type == client.ExporterImage {
+				// I don't know why this is necessary, but if we are using
+				// buildkit inside of docker serivce, then we need
+				// to use the "moby" type exporter instead of the "image"
+				// exporter used with "normal" buildkit clients.
+				solveOpt.Exports[i].Type = "moby"
+			}
+		}
+	}
+
+	var imageconfig []byte
 	res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 		gwReq := gateway.SolveRequest{
 			Evaluate:   req.evaluate,
@@ -111,10 +133,31 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			}
 			return nil, errors.Join(err, errtrace.Wrap(moreErr))
 		}
+		if spec, err := imageConfig(ctx, req.state); err != nil {
+			return nil, errtrace.Wrap(err)
+		} else if spec != nil {
+			imageconfig, err = json.Marshal(spec)
+			if err != nil {
+				return nil, errtrace.Wrap(err)
+			}
+		}
+		if res != nil && res.Metadata != nil {
+			if _, ok := res.Metadata[exptypes.ExporterImageConfigKey]; !ok {
+				// overwrite the image config with our preserve image config
+				// so we collect additional metatdata
+				res.AddMeta(exptypes.ExporterImageConfigKey, imageconfig)
+			}
+		}
 		return res, errtrace.Wrap(err)
 	}, s.progress.Channel(progress.AddLabel(req.Label)))
 	if err != nil {
 		return nil, errtrace.Errorf("solve failed: %w", err)
+	}
+	if len(imageconfig) > 0 {
+		if res.ExporterResponse == nil {
+			res.ExporterResponse = map[string]string{}
+		}
+		res.ExporterResponse[ExporterImageConfigKey] = string(imageconfig)
 	}
 	return res, nil
 }

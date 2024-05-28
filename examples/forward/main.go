@@ -13,28 +13,28 @@ import (
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func main() {
-	platform := ocispecs.Platform{OS: "linux", Architecture: runtime.GOARCH}
+	platform := ocispec.Platform{OS: "linux", Architecture: runtime.GOARCH}
 	localCwd, _ := os.Getwd()
 
 	// ----
 
 	ctx := context.Background()
-	cli, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cli, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
 
 	slv := llblib.NewSolver(llblib.WithCwd(localCwd))
 
-	root := llb.Image("alpine:latest@sha256:e2e16842c9b54d985bf1ef9242a313f36b856181f188de21313820e177002501", llb.Platform(platform)).Dir("/")
-	root = root.Run(llb.Shlex("apk add -U curl socat")).Root()
+	root := llblib.Image("alpine:latest@sha256:e2e16842c9b54d985bf1ef9242a313f36b856181f188de21313820e177002501", llb.Platform(platform)).Dir("/")
+	root = llblib.Run(root, llb.Shlex("apk add -U curl socat")).Root()
 
 	req := slv.Build(
-		root.Run(
+		llblib.Run(root,
 			llb.Shlex("curl -sf --unix /tmp/forward.sock -v http://unix -o /tmp/special"),
 			slv.Forward("tcp://127.0.0.1:1234", "/tmp/forward.sock"),
 			llblib.IgnoreCache(),
@@ -60,7 +60,7 @@ func main() {
 	prog := progress.NewProgress()
 	defer prog.Close()
 
-	sess, err := slv.NewSession(ctx, cli, prog)
+	sess, err := slv.NewSession(ctx, cli, prog, isMoby)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}

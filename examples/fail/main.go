@@ -18,14 +18,14 @@ var differScript []byte
 
 func main() {
 	ctx := context.Background()
-	cli, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cli, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
 
 	slv := llblib.NewSolver()
 
-	root := llb.Image("golang:1.20", llb.LinuxArm64).Dir("/").File(llb.Mkdir("/scratch", 0o777))
+	root := llblib.Image("golang:1.20", llb.LinuxArm64).Dir("/").File(llb.Mkdir("/scratch", 0o777))
 
 	mounts := llblib.RunOptions{
 		llb.AddMount("/scratch", llb.Scratch()),
@@ -65,7 +65,7 @@ func main() {
 	prog := progress.NewProgress()
 	defer prog.Close()
 
-	sess, err := slv.NewSession(ctx, cli, prog)
+	sess, err := slv.NewSession(ctx, cli, prog, isMoby)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}

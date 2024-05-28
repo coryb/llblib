@@ -3,15 +3,19 @@ module github.com/coryb/llblib
 go 1.21
 
 require (
+	braces.dev/errtrace v0.3.0
+	github.com/brunoga/deep v1.2.3
 	github.com/containerd/console v1.0.4
 	github.com/coryb/walky v0.0.0-20221229175356-f7b4e8f780fb
+	github.com/distribution/reference v0.5.0
 	github.com/docker/cli v25.0.3+incompatible
 	github.com/docker/docker v25.0.3+incompatible // master (v25.0.0-dev)
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/moby/buildkit v0.13.2
+	github.com/moby/docker-image-spec v1.3.1
 	github.com/muesli/cancelreader v0.2.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0-rc5
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.8.4
 	github.com/tonistiigi/fsutil v0.0.0-20240424095704-91a3fc46842c
 	go.uber.org/goleak v1.2.1
@@ -24,10 +28,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require (
-	braces.dev/errtrace v0.3.0
-	github.com/distribution/reference v0.5.0
-)
+require github.com/docker/go-connections v0.5.0
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
@@ -42,7 +43,6 @@ require (
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/docker-credential-helpers v0.8.0 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
@@ -59,11 +59,11 @@ require (
 	github.com/in-toto/in-toto-golang v0.5.0 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/patternmatcher v0.6.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect
 	github.com/shibumi/go-pathspec v1.3.0 // indirect

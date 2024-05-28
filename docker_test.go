@@ -8,7 +8,7 @@ import (
 
 	"github.com/coryb/llblib"
 	"github.com/moby/buildkit/client/llb"
-	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +16,7 @@ func TestDockerfile(t *testing.T) {
 	t.Parallel()
 	r := newTestRunner(t)
 
-	linux := specsv1.Platform{
+	linux := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
 	}
@@ -42,7 +42,7 @@ func TestDockerfile(t *testing.T) {
 	tdir := t.TempDir()
 	req := r.Solver.Build(st, llblib.Download(tdir))
 
-	err := r.Run(t, req)
+	_, err := r.Run(t, req)
 	require.NoError(t, err)
 
 	got, err := os.ReadFile(filepath.Join(tdir, "start"))
@@ -58,7 +58,7 @@ func TestDockerfileSyntax(t *testing.T) {
 	t.Parallel()
 	r := newTestRunner(t)
 
-	linux := specsv1.Platform{
+	linux := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
 	}
@@ -87,7 +87,7 @@ RUN false # <- should not run
 	tdir := t.TempDir()
 	req := r.Solver.Build(st, llblib.Download(tdir))
 
-	err := r.Run(t, req)
+	_, err := r.Run(t, req)
 	require.NoError(t, err)
 
 	got, err := os.ReadFile(filepath.Join(tdir, "start"))
@@ -107,7 +107,7 @@ func TestDockerfileBuildContexts(t *testing.T) {
 	t.Parallel()
 	r := newTestRunner(t)
 
-	linux := specsv1.Platform{
+	linux := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
 	}
@@ -147,7 +147,7 @@ func TestDockerfileBuildContexts(t *testing.T) {
 	)
 
 	req := r.Solver.Build(st)
-	err = r.Run(t, req)
+	_, err = r.Run(t, req)
 	require.NoError(t, err)
 }
 
@@ -155,7 +155,7 @@ func TestDockerfileRunMounts(t *testing.T) {
 	t.Parallel()
 	r := newTestRunner(t)
 
-	linux := specsv1.Platform{
+	linux := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
 	}
@@ -186,6 +186,6 @@ func TestDockerfileRunMounts(t *testing.T) {
 	r.Solver.AddSecretFile(filepath.Join(secretDir, "secret"), "", llb.SecretID("my.secret"))
 
 	req := r.Solver.Build(st)
-	err = r.Run(t, req)
+	_, err = r.Run(t, req)
 	require.NoError(t, err)
 }

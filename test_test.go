@@ -30,6 +30,7 @@ type testRunner struct {
 	T        *testing.T
 	Context  context.Context
 	Client   *client.Client
+	isMoby   bool
 	Solver   llblib.Solver
 	Progress progress.Progress
 }
@@ -47,7 +48,7 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 	ctx, cancel := context.WithTimeout(context.Background(), ro.timeout)
 	t.Cleanup(cancel)
 
-	cln, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cln, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		t.Fatalf("Failed to create client: %s", err)
 	}
@@ -65,20 +66,19 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 	return testRunner{
 		Context:  ctx,
 		Client:   cln,
+		isMoby:   isMoby,
 		Solver:   llblib.NewSolver(),
 		Progress: prog,
 	}
 }
 
-func (r testRunner) Run(t *testing.T, req llblib.Request) error {
-	t.Helper()
-	_, err := r.Session(t).Do(r.Context, req)
-	return errtrace.Wrap(err)
+func (r testRunner) Run(t *testing.T, req llblib.Request) (*client.SolveResponse, error) {
+	return errtrace.Wrap2(r.Session(t).Do(r.Context, req))
 }
 
 func (r testRunner) Session(t *testing.T) llblib.Session {
 	t.Helper()
-	sess, err := r.Solver.NewSession(r.Context, r.Client, r.Progress)
+	sess, err := r.Solver.NewSession(r.Context, r.Client, r.Progress, r.isMoby)
 	if err != nil {
 		t.Fatalf("failed to create session: %s", err)
 	}

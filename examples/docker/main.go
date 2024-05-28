@@ -12,19 +12,19 @@ import (
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
-	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func main() {
 	ctx := context.Background()
-	cli, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cli, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
 
 	slv := llblib.NewSolver()
 
-	p := specsv1.Platform{OS: "linux", Architecture: runtime.GOARCH}
+	p := ocispec.Platform{OS: "linux", Architecture: runtime.GOARCH}
 
 	dockerfile := `
 		FROM alpine
@@ -44,7 +44,7 @@ func main() {
 	prog := progress.NewProgress()
 	defer prog.Close()
 
-	sess, err := slv.NewSession(ctx, cli, prog)
+	sess, err := slv.NewSession(ctx, cli, prog, isMoby)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}

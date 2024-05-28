@@ -51,10 +51,10 @@ type Solver interface {
 	// buildkit service.
 	Container(root llb.State, opts ...ContainerOption) Request
 
-	// NewSession will return a session to used to send the solve requests to
+	// NewSession will return a session used to send the solve requests to
 	// buildkit.  Note that `Release` MUST be called on the returned `Session`
 	// to free resources.
-	NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error)
+	NewSession(ctx context.Context, cln *client.Client, p progress.Progress, isMoby bool) (Session, error)
 
 	// ImageResolver returns an llb.ImageMetaResolver to resolve images.  The
 	// resolver will use a common cache for all image lookups done via this
@@ -386,7 +386,7 @@ func (cw *aliveConnWaiter) Read(b []byte) (n int, err error) {
 	return errtrace.Wrap2(cw.Conn.Read(b))
 }
 
-func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.Progress) (Session, error) {
+func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.Progress, isMoby bool) (Session, error) {
 	if s.err != nil {
 		return nil, errtrace.Errorf("solver in error state, cannot proceed: %w", s.err)
 	}
@@ -478,6 +478,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		attachables: attachables,
 		releasers:   releasers,
 		client:      cln,
+		isMoby:      isMoby,
 		localDirs:   localDirs,
 		resolver:    resolver,
 		progress:    p,
