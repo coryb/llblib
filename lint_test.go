@@ -8,7 +8,7 @@ import (
 
 	"github.com/coryb/llblib"
 	"github.com/moby/buildkit/client/llb"
-	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +22,7 @@ func TestLint(t *testing.T) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	currentPlatform := specsv1.Platform{
+	currentPlatform := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
 	}
@@ -39,7 +39,7 @@ func TestLint(t *testing.T) {
 		"golangci/golangci-lint:"+GolangCILintVersion,
 		llb.Platform(currentPlatform),
 	).Run(
-		llb.Args([]string{"golangci-lint", "run", "--timeout", "3m", "--fast"}),
+		llb.Args([]string{"golangci-lint", "run", "--timeout", "9m"}),
 		// ensure go mod cache location is in our persistent cache dir
 		llb.AddEnv("GOMODCACHE", "/root/.cache/go-mod"),
 		llb.Dir(cwd),
@@ -54,6 +54,6 @@ func TestLint(t *testing.T) {
 		),
 	).Root()
 
-	err = r.Run(t, r.Solver.Build(st))
+	_, err = r.Run(t, r.Solver.Build(st))
 	require.NoError(t, err)
 }

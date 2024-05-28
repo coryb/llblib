@@ -74,7 +74,7 @@ func (pm *persistentMounts) Run(opts ...llb.RunOption) {
 
 	runOpts = append(runOpts, opts...)
 
-	execState := pm.root.Run(runOpts...)
+	execState := Run(pm.root, runOpts...)
 	pm.root = execState.Root()
 	for _, mountpoint := range mountpoints {
 		pm.states[mountpoint] = execState.GetMount(mountpoint)

@@ -10,7 +10,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/solver/pb"
-	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // DockerfileOpts alias dockerfile2llb.ConvertOpt
@@ -53,7 +53,7 @@ func WithBuildArg(k, v string) DockerfileOption {
 }
 
 // WithTargetPlatform will set the platform for the Dockerfile build.
-func WithTargetPlatform(p *specsv1.Platform) DockerfileOption {
+func WithTargetPlatform(p *ocispec.Platform) DockerfileOption {
 	return dockerfileOptionFunc(func(o *dockerfileOpts) {
 		o.TargetPlatform = p
 	})
@@ -100,11 +100,11 @@ func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOpt
 }
 
 func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (llb.State, error) {
-	state, _, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
+	state, img, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
 	if err != nil {
 		return llb.Scratch(), errtrace.Wrap(err)
 	}
-	return *state, nil
+	return withImageConfig(*state, img), nil
 }
 
 const (

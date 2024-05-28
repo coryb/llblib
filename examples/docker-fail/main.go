@@ -15,7 +15,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	cli, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cli, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
@@ -43,7 +43,7 @@ func main() {
 	prog := progress.NewProgress(progress.WithOutput(console.Current()))
 	defer prog.Close()
 
-	sess, err := slv.NewSession(ctx, cli, prog)
+	sess, err := slv.NewSession(ctx, cli, prog, isMoby)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}

@@ -33,30 +33,30 @@ import (
 //	docker run -d --name buildkitd --privileged moby/buildkit:latest
 //
 // Then use this `addr` value: `docker-container://buildkitd`
-func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
-	cln, err := newClient(ctx, addr, opts...)
+func NewClient(ctx context.Context, addr string, opts ...client.ClientOpt) (c *client.Client, isMoby bool, err error) {
+	cln, isMoby, err := newClient(ctx, addr, opts...)
 	if err != nil {
-		return nil, errtrace.Wrap(err)
+		return nil, false, errtrace.Wrap(err)
 	}
 
 	_, err = cln.Info(ctx)
 	if err == nil {
-		return cln, nil
+		return cln, isMoby, nil
 	}
 
 	// Info API added in v0.11
 	if !ErrUnimplemented(err) {
 		cln.Close()
-		return nil, errtrace.Errorf("unable to connect to buildkitd: %w", err)
+		return nil, false, errtrace.Errorf("unable to connect to buildkitd: %w", err)
 	}
 
 	// If we are still here then Info is Unimplemented, so fallback to
 	// ListWorkers which can be a bit slower
 	if _, err := cln.ListWorkers(ctx); err != nil {
 		cln.Close()
-		return nil, errtrace.Errorf("unable to connect to buildkitd: %w", err)
+		return nil, false, errtrace.Errorf("unable to connect to buildkitd: %w", err)
 	}
-	return cln, nil
+	return cln, isMoby, nil
 }
 
 type grpcError interface{ GRPCStatus() *status.Status }
@@ -71,14 +71,15 @@ func ErrUnimplemented(err error) bool {
 	return false
 }
 
-func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*client.Client, error) {
+func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (c *client.Client, isMoby bool, err error) {
 	if addr != "" && !strings.HasPrefix(addr, "docker://") {
-		return errtrace.Wrap2(client.New(ctx, addr, opts...))
+		c, err := client.New(ctx, addr, opts...)
+		return c, false, errtrace.Wrap(err)
 	}
 
 	host, err := DockerHost(ctx)
 	if err != nil {
-		return nil, errtrace.Errorf("unable to determine docker host: %w", err)
+		return nil, false, errtrace.Errorf("unable to determine docker host: %w", err)
 	}
 	// no address, attempt to use docker built-in buildkit
 	dc, err := dockerclient.NewClientWithOpts(
@@ -86,14 +87,15 @@ func newClient(ctx context.Context, addr string, opts ...client.ClientOpt) (*cli
 		dockerclient.WithAPIVersionNegotiation(),
 	)
 	if err != nil {
-		return nil, errtrace.Errorf("buildkitd address empty and failed to connect to docker: %w", err)
+		return nil, false, errtrace.Errorf("buildkitd address empty and failed to connect to docker: %w", err)
 	}
 	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return errtrace.Wrap2(dc.DialHijack(ctx, "/grpc", "h2c", nil))
 	}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
 		return errtrace.Wrap2(dc.DialHijack(ctx, "/session", proto, meta))
 	}))
-	return errtrace.Wrap2(client.New(ctx, "", opts...))
+	c, err = client.New(ctx, "", opts...)
+	return c, true, errtrace.Wrap(err)
 }
 
 // DockerDir returns the path to the user's Docker config dir.

@@ -1,7 +1,7 @@
 - type: EXEC
   args: [/bin/true]
-  env: [FOO=BAR]
-  cwd: /
+  env: ['PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', GOLANG_VERSION=1.20.1, GOPATH=/go, FOO=BAR]
+  cwd: /go
   extra-hosts:
     - {host: home, ip: 127.0.0.1}
   security-mode: INSECURE

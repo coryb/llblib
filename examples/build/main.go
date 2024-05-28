@@ -12,7 +12,7 @@ import (
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -40,12 +40,12 @@ func main() {
 		"/root/.cache/go-build",
 		"/go/pkg/mod",
 	}
-	platform := ocispecs.Platform{OS: "linux", Architecture: runtime.GOARCH}
+	platform := ocispec.Platform{OS: "linux", Architecture: runtime.GOARCH}
 
 	// ----
 
 	ctx := context.Background()
-	cln, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
+	cln, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
@@ -69,7 +69,7 @@ func main() {
 	}
 
 	for _, cmd := range setup {
-		root = root.Run(
+		root = llblib.Run(root,
 			llb.Shlex(cmd),
 			llblib.AddEnvs(env),
 			llblib.AddCacheMounts(cachePaths, cacheID, llb.CacheMountPrivate),
@@ -107,7 +107,7 @@ func main() {
 	prog := progress.NewProgress()
 	defer prog.Close()
 
-	sess, err := slv.NewSession(ctx, cln, prog)
+	sess, err := slv.NewSession(ctx, cln, prog, isMoby)
 	if err != nil {
 		log.Panicf("failed to create session: %+v", err)
 	}
