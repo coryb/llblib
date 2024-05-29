@@ -115,6 +115,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 				// "moby" type exporter instead of the "image" exporter used
 				// with "normal" buildkit clients.
 				solveOpt.Exports[i].Type = "moby"
+				solveOpt.Exports[i].Output = nil
 			}
 		}
 	}
