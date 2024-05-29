@@ -78,9 +78,13 @@ func (r *resolveImageCache) lookup(
 	opt sourceresolver.Opt,
 	resolver func() (string, digest.Digest, []byte, error),
 ) (string, digest.Digest, []byte, error) {
+	var mode string
+	if opt.ImageOpt != nil {
+		mode = opt.ImageOpt.ResolveMode
+	}
 	key := resolveImageCacheKey{
 		ref:  ref,
-		mode: opt.ImageOpt.ResolveMode,
+		mode: mode,
 	}
 	if opt.Platform != nil {
 		key.os = opt.Platform.OS
