@@ -25,7 +25,7 @@ func TestExitError(t *testing.T) {
 		).Root(),
 	)
 
-	err := r.Run(t, req)
+	_, err := r.Run(t, req)
 	var exitError *gwpb.ExitError
 	require.ErrorAs(t, err, &exitError)
 	require.Equal(t, uint32(99), exitError.ExitCode)

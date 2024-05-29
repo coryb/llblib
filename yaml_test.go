@@ -10,7 +10,8 @@ import (
 	"github.com/coryb/llblib"
 	"github.com/coryb/walky"
 	"github.com/moby/buildkit/client/llb"
-	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -25,6 +26,7 @@ func TestYAML(t *testing.T) {
 
 	for _, tt := range []struct {
 		states   []llb.State
+		unstable bool
 		expected string
 	}{{
 		states:   states(llb.Scratch()),
@@ -33,13 +35,13 @@ func TestYAML(t *testing.T) {
 		states:   states(r.Solver.Local(".")),
 		expected: "local",
 	}, {
-		states:   states(llb.Image("golang:1.20.1", llb.LinuxAmd64)),
+		states:   states(llblib.Image("golang:1.20.1", llb.LinuxAmd64)),
 		expected: "image",
 	}, {
 		states: states(
-			llb.Diff(
-				llb.Image("golang:1.20.1", llb.LinuxAmd64),
-				llb.Image("golang:1.20.1", llb.LinuxAmd64).File(
+			llblib.Diff(
+				llblib.Image("golang:1.20.1", llb.LinuxAmd64),
+				llblib.Image("golang:1.20.1", llb.LinuxAmd64).File(
 					llb.Mkdir("/foobar", 0o755).Mkfile("/foobar/file", 0o644, []byte("contents")),
 				),
 			),
@@ -47,8 +49,8 @@ func TestYAML(t *testing.T) {
 		expected: "diff",
 	}, {
 		states: states(
-			llb.Merge([]llb.State{
-				llb.Image("golang:1.20.1", llb.LinuxAmd64),
+			llblib.Merge([]llb.State{
+				llblib.Image("golang:1.20.1", llb.LinuxAmd64),
 				llb.Scratch().File(
 					llb.Mkdir("/foobar", 0o755),
 				).File(
@@ -59,18 +61,18 @@ func TestYAML(t *testing.T) {
 		expected: "merge",
 	}, {
 		states: states(
-			llb.Image("golang:1.20.1", llb.LinuxAmd64).Run(
+			llblib.Image("golang:1.20.1", llb.LinuxAmd64).Run(
 				llb.Args([]string{"/bin/true"}),
 			).Root(),
 		),
 		expected: "run",
 	}, {
 		states: states(
-			llb.Image("golang:1.20.1", llb.LinuxAmd64).Run(
+			llblib.Image("golang:1.20.1", llb.LinuxAmd64).Run(
 				llb.Args([]string{"/bin/true"}),
 				llb.WithCustomName("good build"),
 			).Root(),
-			llb.Image("golang:1.20.1", llb.LinuxAmd64).Run(
+			llblib.Image("golang:1.20.1", llb.LinuxAmd64).Run(
 				llb.Args([]string{"/bin/false"}),
 				llb.WithCustomName("bad build"),
 			).Root(),
@@ -78,7 +80,7 @@ func TestYAML(t *testing.T) {
 		expected: "runs",
 	}, {
 		states: states(
-			llb.Image("golang:1.20.1", llb.LinuxAmd64).Run(
+			llblib.Image("golang:1.20.1", llb.LinuxAmd64).Run(
 				llb.Args([]string{"/bin/true"}),
 				llb.Security(llb.SecurityModeInsecure),
 				llb.AddEnv("FOO", "BAR"),
@@ -96,7 +98,7 @@ func TestYAML(t *testing.T) {
 	}, {
 		states: func() []llb.State {
 			mp := llblib.Persistent(
-				llb.Image("golang:1.20.1", llb.LinuxAmd64),
+				llblib.Image("golang:1.20.1", llb.LinuxAmd64),
 				llb.AddMount("/scratch", llb.Scratch()),
 				llb.AddMount("/git",
 					llb.Git("https://github.com/moby/buildkit.git", "baaf67ba976460a51ef198abab88baae376c32d8",
@@ -144,10 +146,11 @@ func TestYAML(t *testing.T) {
 			`),
 			llb.Scratch(),
 			llblib.WithTarget("download"),
-			llblib.WithTargetPlatform(&specsv1.Platform{
+			llblib.WithTargetPlatform(&ocispec.Platform{
 				OS: "linux", Architecture: "arm64",
 			}),
 		)),
+		unstable: true,
 		expected: "dockerfile",
 	}, {
 		states: states(llblib.Dockerfile(
@@ -158,14 +161,14 @@ func TestYAML(t *testing.T) {
 				RUN echo hi
 			`),
 			llb.Scratch(),
-			llblib.WithTargetPlatform(&specsv1.Platform{
+			llblib.WithTargetPlatform(&ocispec.Platform{
 				OS: "linux", Architecture: "arm64",
 			}),
 		)),
 		expected: "dockerfile-user",
 	}, {
 		states: states(
-			llb.Image("busybox", llb.LinuxAmd64).Run(
+			llblib.Image("busybox", llb.LinuxAmd64).Run(
 				llb.Shlex("cat /secret"),
 				r.Solver.AddSecretFile("yaml_test.go", "/secret"),
 			).Root(),
@@ -173,14 +176,14 @@ func TestYAML(t *testing.T) {
 		expected: "secrets",
 	}, {
 		states: states(
-			llb.Image("busybox", llb.LinuxAmd64).Run(
+			llblib.Image("busybox", llb.LinuxAmd64).Run(
 				llb.Args([]string{"/bin/sh", "-c", "echo multi\necho line\necho statement"}),
 			).Root(),
 		),
 		expected: "script",
 	}, {
 		states: states(
-			llb.Image("busybox", llb.LinuxAmd64).Run(
+			llblib.Image("busybox", llb.LinuxAmd64).Run(
 				llb.Args([]string{"cat", "/tmp/unix.sock"}),
 				r.Solver.Forward("unix://./unix.sock", "/tmp/unix.sock"),
 			).Root(),
@@ -210,23 +213,38 @@ func TestYAML(t *testing.T) {
 			sess := r.Session(t)
 			ctx := llblib.WithSession(r.Context, sess)
 
-			node, err := llblib.ToYAML(ctx, tt.states...)
-			require.NoError(t, err, "converting state to YAML")
-
-			for _, key := range []string{"local.sharedkeyhint", "local.unique", "secret"} {
-				walky.Walk(node, walky.StringWalker(key, func(n *yaml.Node) error {
-					n.Value = "test-constant"
-					return nil
-				}))
-			}
-
-			got, err := yaml.Marshal(node)
-			require.NoError(t, err, "marshalling YAML")
-
 			file := filepath.Join("test-data", tt.expected+".yaml")
 			expected, err := os.ReadFile(file)
 			require.NoError(t, err, "reading file: %s", file)
-			require.Equal(t, string(expected), string(got))
+
+			attempt := func(t require.TestingT) bool {
+				node, err := llblib.ToYAML(ctx, tt.states...)
+				require.NoError(t, err, "converting state to YAML")
+
+				for _, key := range []string{"local.sharedkeyhint", "local.unique", "secret"} {
+					walky.Walk(node, walky.StringWalker(key, func(n *yaml.Node) error {
+						n.Value = "test-constant"
+						return nil
+					}))
+				}
+
+				got, err := yaml.Marshal(node)
+				require.NoError(t, err, "marshalling YAML")
+				return assert.Equal(t, string(expected), string(got))
+			}
+
+			if tt.unstable {
+				// llblib.ToYAML might not consistently serialize due to states
+				// being resolved by frontends, in which case we might get a list of
+				// operations in a random order.  To work around this we just
+				// retry the serialization up to 10 times until it matches our
+				// expected output.
+				require.EventuallyWithT(t, func(t *assert.CollectT) {
+					attempt(t)
+				}, time.Second, 100*time.Millisecond)
+			} else {
+				require.True(t, attempt(t))
+			}
 		})
 	}
 }

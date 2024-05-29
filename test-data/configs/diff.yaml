@@ -1,0 +1,16 @@
+architecture: amd64
+config: {}
+created: "0001-01-01T00:00:00Z"
+history:
+    - created: "2024-05-22T18:18:11.872913732Z"
+      created_by: '/bin/sh -c #(nop) ADD file:e3abcdba177145039cfef1ad882f9f81a612a24c9f044b19f713b95454d2e3f6 in / '
+    - created: "2024-05-22T18:18:12.052034407Z"
+      created_by: '/bin/sh -c #(nop)  CMD ["/bin/sh"]'
+      empty_layer: true
+    - comment: llblib.v0
+      created: "0001-01-01T00:00:00Z"
+      created_by: DIFF 543a865260facdb8281a70d1524fa666461dfd347d9e07516dba5b2045f347c8:/ eb8b43fcd3f7eaaf8c5510b69f68d6418b08d5231210b0e730a3407cc0fb68b5:/
+os: linux
+rootfs:
+    diff_ids: null
+    type: ""

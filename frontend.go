@@ -8,7 +8,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
-	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	mdispec "github.com/moby/docker-image-spec/specs-go/v1"
 )
 
 // FrontendOption can be used to modify a Frontend request.
@@ -151,10 +151,11 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 						}
 						// we need to parse the document again bc WithImageConfig
 						// does not apply the USER config.
-						var img specsv1.Image
+						var img mdispec.DockerOCIImage
 						if err := json.Unmarshal(config, &img); err != nil {
 							return nil, errtrace.Errorf("failed to parse config from frontend request: %w", err)
 						}
+						result = withImageConfig(result, &img)
 						if img.Config.User != "" {
 							result = result.User(img.Config.User)
 						}
