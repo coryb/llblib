@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 
+	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	specsv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
 )
 
 // FrontendOption can be used to modify a Frontend request.
@@ -99,7 +99,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 
 		sess := LoadSession(ctx)
 		if sess == nil {
-			return llb.Scratch(), errors.Errorf("frontend solve request without active session")
+			return llb.Scratch(), errtrace.New("frontend solve request without active session")
 		}
 
 		var constrainOpt llb.ConstraintsOpt = constraintsToOptions{
@@ -114,7 +114,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 				for name, input := range fo.Inputs {
 					def, err := input.Marshal(ctx, constrainOpt)
 					if err != nil {
-						return nil, err
+						return nil, errtrace.Wrap(err)
 					}
 					// only add inputs that are non-nil (ie dont add scratch)
 					// because otherwise we will get a solve error:
@@ -130,30 +130,30 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 				}
 				res, err := c.Solve(ctx, req)
 				if err != nil {
-					return nil, errors.Wrap(err, "failed to solve frontend request")
+					return nil, errtrace.Errorf("failed to solve frontend request: %w", err)
 				}
 
 				ref, err := res.SingleRef()
 				if err != nil {
-					return nil, errors.Wrap(err, "failed to extract ref from frontend request")
+					return nil, errtrace.Errorf("failed to extract ref from frontend request: %w", err)
 				}
 				if ref == nil {
 					result = llb.Scratch()
 				} else {
 					result, err = ref.ToState()
 					if err != nil {
-						return nil, errors.Wrap(err, "failed to convert ref to state")
+						return nil, errtrace.Errorf("failed to convert ref to state: %w", err)
 					}
 					if config, ok := res.Metadata["containerimage.config"]; ok {
 						result, err = result.WithImageConfig(config)
 						if err != nil {
-							return nil, errors.Wrap(err, "failed to apply image config from frontend request")
+							return nil, errtrace.Errorf("failed to apply image config from frontend request: %w", err)
 						}
 						// we need to parse the document again bc WithImageConfig
 						// does not apply the USER config.
 						var img specsv1.Image
 						if err := json.Unmarshal(config, &img); err != nil {
-							return nil, errors.Wrap(err, "failed to parse config from frontend request")
+							return nil, errtrace.Errorf("failed to parse config from frontend request: %w", err)
 						}
 						if img.Config.User != "" {
 							result = result.User(img.Config.User)
@@ -165,6 +165,6 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 		}
 		_, err := sess.Do(ctx, req)
 
-		return result, err
+		return result, errtrace.Wrap(err)
 	})
 }

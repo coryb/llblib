@@ -2,14 +2,14 @@ package llblib
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 
+	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
-	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
@@ -43,11 +43,11 @@ func (s *session) Release() error {
 	var err error
 	for i := len(s.releasers) - 1; i >= 0; i-- {
 		if e := s.releasers[i](); err != nil {
-			err = goerrors.Join(err, e)
+			err = errors.Join(err, e)
 		}
 	}
 
-	return s.sess.Close()
+	return errtrace.Wrap(s.sess.Close())
 }
 
 func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, error) {
@@ -56,7 +56,7 @@ func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, erro
 	for _, req := range reqs {
 		states = append(states, req.state)
 	}
-	return ToYAML(ctx, states...)
+	return errtrace.Wrap2(ToYAML(ctx, states...))
 }
 
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
@@ -80,14 +80,14 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			if err != nil && req.onError != nil {
 				dropErr, moreErr := req.onError(ctx, c, err)
 				if dropErr {
-					return nil, moreErr
+					return nil, errtrace.Wrap(moreErr)
 				}
-				return nil, goerrors.Join(err, moreErr)
+				return nil, errors.Join(err, errtrace.Wrap(moreErr))
 			}
-			return res, err
+			return res, errtrace.Wrap(err)
 		}, s.progress.Channel(progress.AddLabel(req.Label)))
 		if err != nil {
-			return nil, errors.Wrap(err, "build failed")
+			return nil, errtrace.Errorf("build failed: %w", err)
 		}
 		return res, nil
 	}
@@ -95,7 +95,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 	solveOpt.Exports = req.exports
 	def, err := req.state.Marshal(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal state")
+		return nil, errtrace.Errorf("failed to marshal state: %w", err)
 	}
 
 	res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
@@ -107,14 +107,14 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		if err != nil && req.onError != nil {
 			dropErr, moreErr := req.onError(ctx, c, err)
 			if dropErr {
-				return nil, moreErr
+				return nil, errtrace.Wrap(moreErr)
 			}
-			return nil, goerrors.Join(err, moreErr)
+			return nil, errors.Join(err, errtrace.Wrap(moreErr))
 		}
-		return res, err
+		return res, errtrace.Wrap(err)
 	}, s.progress.Channel(progress.AddLabel(req.Label)))
 	if err != nil {
-		return nil, errors.Wrap(err, "solve failed")
+		return nil, errtrace.Errorf("solve failed: %w", err)
 	}
 	return res, nil
 }

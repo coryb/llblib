@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
+	"braces.dev/errtrace"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/sshforward"
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/sync/errgroup"
@@ -36,10 +36,10 @@ func NewProvider(confs []AgentConfig) (session.Attachable, error) {
 	for _, conf := range confs {
 		if !conf.SSH {
 			if len(conf.Paths) != 1 {
-				return nil, errors.Errorf("must provide a path to a socket")
+				return nil, errtrace.New("must provide a path to a socket")
 			}
 			if _, ok := m[conf.ID]; ok {
-				return nil, errors.Errorf("invalid duplicate ID %s", conf.ID)
+				return nil, errtrace.Errorf("invalid duplicate ID %q", conf.ID)
 			}
 			m[conf.ID] = source{socket: conf.Paths[0]}
 			continue
@@ -50,18 +50,18 @@ func NewProvider(confs []AgentConfig) (session.Attachable, error) {
 		}
 
 		if conf.Paths[0] == "" {
-			return nil, errors.Errorf("invalid empty ssh agent socket, make sure SSH_AUTH_SOCK is set")
+			return nil, errtrace.New("invalid empty ssh agent socket, make sure SSH_AUTH_SOCK is set")
 		}
 
 		src, err := toAgentSource(conf.Paths)
 		if err != nil {
-			return nil, err
+			return nil, errtrace.Wrap(err)
 		}
 		if conf.ID == "" {
 			conf.ID = sshforward.DefaultID
 		}
 		if _, ok := m[conf.ID]; ok {
-			return nil, errors.Errorf("invalid duplicate ID %s", conf.ID)
+			return nil, errtrace.Errorf("invalid duplicate ID %q", conf.ID)
 		}
 		m[conf.ID] = src
 	}
@@ -89,7 +89,7 @@ func (sp *socketProvider) CheckAgent(ctx context.Context, req *sshforward.CheckA
 		id = req.ID
 	}
 	if _, ok := sp.m[id]; !ok {
-		return &sshforward.CheckAgentResponse{}, errors.Errorf("unset ssh forward key %s", id)
+		return &sshforward.CheckAgentResponse{}, errtrace.Errorf("unset ssh forward key %q", id)
 	}
 	return &sshforward.CheckAgentResponse{}, nil
 }
@@ -105,7 +105,7 @@ func (sp *socketProvider) ForwardAgent(stream sshforward.SSH_ForwardAgentServer)
 
 	src, ok := sp.m[id]
 	if !ok {
-		return errors.Errorf("unset ssh forward key %s", id)
+		return errtrace.Errorf("unset ssh forward key %q", id)
 	}
 
 	eg, ctx := errgroup.WithContext(context.TODO())
@@ -115,14 +115,14 @@ func (sp *socketProvider) ForwardAgent(stream sshforward.SSH_ForwardAgentServer)
 		var err error
 		conn, err = net.DialTimeout("unix", src.socket, time.Second)
 		if err != nil {
-			return errors.Wrapf(err, "failed to connect to %s", src.socket)
+			return errtrace.Errorf("failed to connect to %q: %w", src.socket, err)
 		}
 		defer conn.Close()
 	}
 
 	if !src.ssh {
 		eg.Go(func() error {
-			return sshforward.Copy(ctx, conn, stream, nil)
+			return errtrace.Wrap(sshforward.Copy(ctx, conn, stream, nil))
 		})
 	} else {
 		var a agent.Agent
@@ -136,16 +136,16 @@ func (sp *socketProvider) ForwardAgent(stream sshforward.SSH_ForwardAgentServer)
 		s1, s2 := sockPair()
 
 		eg.Go(func() error {
-			return agent.ServeAgent(a, s1)
+			return errtrace.Wrap(agent.ServeAgent(a, s1))
 		})
 
 		eg.Go(func() error {
 			defer s1.Close()
-			return sshforward.Copy(ctx, s2, stream, nil)
+			return errtrace.Wrap(sshforward.Copy(ctx, s2, stream, nil))
 		})
 	}
 
-	return eg.Wait()
+	return errtrace.Wrap(eg.Wait())
 }
 
 func toAgentSource(paths []string) (source, error) {
@@ -154,15 +154,15 @@ func toAgentSource(paths []string) (source, error) {
 	a := agent.NewKeyring()
 	for _, p := range paths {
 		if socket != "" {
-			return source{}, errors.New("only single socket allowed")
+			return source{}, errtrace.New("only single socket allowed")
 		}
 		fi, err := os.Stat(p)
 		if err != nil {
-			return source{}, errors.WithStack(err)
+			return source{}, errtrace.Wrap(err)
 		}
 		if fi.Mode()&os.ModeSocket > 0 {
 			if keys {
-				return source{}, errors.Errorf("invalid combination of keys and sockets")
+				return source{}, errtrace.New("invalid combination of keys and sockets")
 			}
 			socket = p
 			continue
@@ -170,19 +170,19 @@ func toAgentSource(paths []string) (source, error) {
 		keys = true
 		f, err := os.Open(p)
 		if err != nil {
-			return source{}, errors.Wrapf(err, "failed to open %s", p)
+			return source{}, errtrace.Errorf("failed to open %q: %w", p, err)
 		}
 		dt, err := io.ReadAll(&io.LimitedReader{R: f, N: 100 * 1024})
 		if err != nil {
-			return source{}, errors.Wrapf(err, "failed to read %s", p)
+			return source{}, errtrace.Errorf("failed to read %q: %w", p, err)
 		}
 
 		k, err := ssh.ParseRawPrivateKey(dt)
 		if err != nil {
-			return source{}, errors.Wrapf(err, "failed to parse %s", p) // TODO: prompt passphrase?
+			return source{}, errtrace.Errorf("failed to parse %q: %w", p, err) // TODO: prompt passphrase?
 		}
 		if err := a.Add(agent.AddedKey{PrivateKey: k}); err != nil {
-			return source{}, errors.Wrapf(err, "failed to add %s to agent", p)
+			return source{}, errtrace.Errorf("failed to add %q to agent: %w", p, err)
 		}
 	}
 
@@ -210,21 +210,21 @@ type readOnlyAgent struct {
 }
 
 func (a *readOnlyAgent) Add(_ agent.AddedKey) error {
-	return errors.Errorf("adding new keys not allowed by buildkit")
+	return errtrace.New("adding new keys not allowed by buildkit")
 }
 
 func (a *readOnlyAgent) Remove(_ ssh.PublicKey) error {
-	return errors.Errorf("removing keys not allowed by buildkit")
+	return errtrace.New("removing keys not allowed by buildkit")
 }
 
 func (a *readOnlyAgent) RemoveAll() error {
-	return errors.Errorf("removing keys not allowed by buildkit")
+	return errtrace.New("removing keys not allowed by buildkit")
 }
 
 func (a *readOnlyAgent) Lock(_ []byte) error {
-	return errors.Errorf("locking agent not allowed by buildkit")
+	return errtrace.New("locking agent not allowed by buildkit")
 }
 
 func (a *readOnlyAgent) Extension(_ string, _ []byte) ([]byte, error) {
-	return nil, errors.Errorf("extensions not allowed by buildkit")
+	return nil, errtrace.New("extensions not allowed by buildkit")
 }

@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"braces.dev/errtrace"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
 )
@@ -32,7 +32,7 @@ func handleResize(co *ContainerOptions, fd int) {
 				case <-ch:
 					ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
 					if err != nil {
-						return errors.Wrap(err, "failed to get winsize")
+						return errtrace.Errorf("failed to get winsize: %w", err)
 					}
 					resize <- gateway.WinSize{
 						Cols: uint32(ws.Col),
@@ -47,7 +47,7 @@ func handleResize(co *ContainerOptions, fd int) {
 			return nil
 		}, func() error {
 			if err := eg.Wait(); err != nil {
-				return errors.Wrap(err, "SIGWINCH event loop failed")
+				return errtrace.Errorf("SIGWINCH event loop failed: %w", err)
 			}
 			return nil
 		})
