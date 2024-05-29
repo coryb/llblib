@@ -99,7 +99,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 
 		sess := LoadSession(ctx)
 		if sess == nil {
-			return llb.Scratch(), errtrace.Errorf("frontend solve request without active session")
+			return llb.Scratch(), errtrace.New("frontend solve request without active session")
 		}
 
 		var constrainOpt llb.ConstraintsOpt = constraintsToOptions{

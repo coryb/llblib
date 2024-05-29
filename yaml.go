@@ -477,7 +477,7 @@ func (g graphState) yamlMount(op *pb.Op, m *pb.Mount) (*yaml.Node, error) {
 
 	input, err := g.visit(op.Inputs[m.Input])
 	if err != nil {
-		return nil, errtrace.Errorf("visiting mount %s: %w", m.Dest, err)
+		return nil, errtrace.Errorf("visiting mount %q: %w", m.Dest, err)
 	}
 	yamlMapAdd(mount, walky.NewStringNode("input"), input)
 	return mount, nil
@@ -620,7 +620,7 @@ func (g graphState) yamlBuildOp(op *pb.Op, b *pb.BuildOp) (*yaml.Node, error) {
 		} else {
 			input, err := g.visit(op.Inputs[b.Inputs[name].Input])
 			if err != nil {
-				return nil, errtrace.Errorf("visiting buildOp input %s: %w", name, err)
+				return nil, errtrace.Errorf("visiting buildOp input %q: %w", name, err)
 			}
 			yamlMapAdd(inputs, walky.NewStringNode(name), input)
 		}
