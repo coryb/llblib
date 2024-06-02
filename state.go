@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	mdispec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 )
 
 // Digest returns the digest for the state.
@@ -301,6 +303,18 @@ func AddLabel(key, value string) llb.StateOption {
 			commitHistoryKV(ctx, img, "LABEL", key, value)
 			return nil
 		})
+	}
+}
+
+// AddLabels records a LABEL to the image config.
+func AddLabels(labels map[string]string) llb.StateOption {
+	return func(st llb.State) llb.State {
+		keys := maps.Keys(labels)
+		sort.Strings(keys)
+		for _, key := range keys {
+			st = AddLabel(key, labels[key])(st)
+		}
+		return st
 	}
 }
 
