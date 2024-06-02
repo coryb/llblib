@@ -2,14 +2,17 @@ package llblib
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
+	"github.com/docker/cli/cli/config"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -35,6 +38,10 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourc
 		if r.sess != nil {
 			opts.SharedSession = r.sess
 			opts.SessionPreInitialized = true
+		} else {
+			// By default, forward docker authentication through the session.
+			dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+			opts.Session = []bksess.Attachable{authprovider.NewDockerAuthProvider(dockerConfig, nil)}
 		}
 		var (
 			d      digest.Digest
@@ -118,10 +125,10 @@ func (v *resolveImageCacheValue) fetch(ctx context.Context) (string, digest.Dige
 	}
 }
 
-func (v *resolveImageCacheValue) store(ref string, d digest.Digest, config []byte, err error) {
+func (v *resolveImageCacheValue) store(ref string, d digest.Digest, cfg []byte, err error) {
 	v.ref = ref
 	v.digest = d
-	v.config = config
+	v.config = cfg
 	v.err = err
 	close(v.inflight)
 }
