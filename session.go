@@ -91,6 +91,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 	prog := s.progress.Label(req.Label)
 	ctx = WithProgress(ctx, prog)
 	ctx = WithSession(ctx, s)
+	ctx = withSessionID(ctx, sess.ID())
 
 	if req.buildFunc != nil {
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {

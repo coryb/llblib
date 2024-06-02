@@ -13,6 +13,7 @@ type (
 	progressKey      struct{}
 	sessionKey       struct{}
 	imageResolverKey struct{}
+	sessionIDKey     struct{}
 	envKey           string
 )
 
@@ -50,6 +51,18 @@ func (p nullProgress) Channel(opts ...progress.ChannelOption) chan *client.Solve
 		}
 	}()
 	return ch
+}
+
+func withSessionID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, sessionIDKey{}, id)
+}
+
+func sessionID(ctx context.Context) string {
+	t, ok := ctx.Value(sessionIDKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return t
 }
 
 // WithSession returns a context with the provided session stored.

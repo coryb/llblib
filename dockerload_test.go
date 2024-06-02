@@ -11,6 +11,7 @@ import (
 	"github.com/coryb/llblib"
 	"github.com/coryb/llblib/progress"
 	"github.com/distribution/reference"
+	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/docker/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -36,6 +37,9 @@ func TestDockerLoad(t *testing.T) {
 		dockerClient.Close()
 	})
 
+	ref, err := reference.Parse("llblib-test/docker-load")
+	require.NoError(t, err)
+
 	var eg errgroup.Group
 	eg.Go(func() error {
 		defer reader.Close()
@@ -45,14 +49,17 @@ func TestDockerLoad(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		progress.FromReader(r.Progress, "importing to docker", resp.Body)
+
+		inspect, _, err := dockerClient.ImageInspectWithRaw(r.Context, ref.String())
+		if err != nil {
+			return errtrace.Errorf("failed to inspect image: %w", err)
+		}
+		require.Equal(t, strslice.StrSlice{"uname", "-a"}, inspect.Config.Entrypoint)
 		return nil
 	})
 
-	ref, err := reference.Parse("llblib-test/docker-load")
-	require.NoError(t, err)
-
 	req := r.Solver.Build(
-		busybox,
+		busybox.With(llblib.Entrypoint("uname", "-a")),
 		llblib.DockerSave(ref, writer),
 	)
 

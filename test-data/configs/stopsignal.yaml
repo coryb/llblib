@@ -5,6 +5,13 @@ config:
     Env:
         - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     StopSignal: SIGUSR1
+container_config:
+    Cmd:
+        - /bin/sh
+        - -c
+        - '#(nop) '
+        - CMD ["/bin/sh"]
+    Labels: {}
 created: "0001-01-01T00:00:00Z"
 history:
     - created: "2024-05-22T18:18:11.872913732Z"

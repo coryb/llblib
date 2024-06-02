@@ -18,13 +18,38 @@ import (
 type imageConfigKey struct{}
 
 type imageConfigState struct {
-	config  *mdispec.DockerOCIImage
-	mutator func(context.Context, *mdispec.DockerOCIImage) error
+	config  *ImageConfig
+	mutator func(context.Context, *ImageConfig) error
+}
+
+// ContainerConfig is the schema1-compatible configuration of the container
+// that is committed into the image.
+type ContainerConfig struct {
+	Cmd    []string          `json:"Cmd"`
+	Labels map[string]string `json:"Labels"`
+}
+
+// History wraps ocispec.History but allows us to track which session
+// added the history entry so we can safely mutate existing records.
+type History struct {
+	ocispec.History
+	// sessionID is the unique identifier for the session that created this
+	// history entry, this value is not persisted to the config and is only
+	// used to determine if we should append to an existing history record
+	// or append a new one for some key/value history commits.
+	sessionID string
+}
+
+// ImageConfig holds the configuration for an image.
+type ImageConfig struct {
+	mdispec.DockerOCIImage
+	ContainerConfig ContainerConfig `json:"container_config,omitempty"`
+	History         []History       `json:"history,omitempty"`
 }
 
 // imageConfig will attempt to build the image config from values stored on the
 // llb.State.
-func imageConfig(ctx context.Context, st llb.State) (*mdispec.DockerOCIImage, error) {
+func imageConfig(ctx context.Context, st llb.State) (*ImageConfig, error) {
 	cs, err := loadImageConfigState(ctx, st)
 	if err != nil {
 		return nil, errtrace.Wrap(err)
@@ -55,13 +80,13 @@ func loadImageConfigState(ctx context.Context, st llb.State) (imageConfigState, 
 }
 
 // withImageConfig will store the image config on the llb.State.
-func withImageConfig(st llb.State, config *mdispec.DockerOCIImage) llb.State {
+func withImageConfig(st llb.State, config *ImageConfig) llb.State {
 	return st.WithValue(imageConfigKey{}, imageConfigState{config: config})
 }
 
 // withImageConfigMutator will store the image config mutator on the llb.State.
 // The mutator will be applied to the image config when imageConfig is called.
-func withImageConfigMutator(st llb.State, m func(context.Context, *mdispec.DockerOCIImage) error) llb.State {
+func withImageConfigMutator(st llb.State, m func(context.Context, *ImageConfig) error) llb.State {
 	return st.Async(func(ctx context.Context, st llb.State, c *llb.Constraints) (llb.State, error) {
 		cs, err := loadImageConfigState(ctx, st)
 		if err != nil {
@@ -72,9 +97,11 @@ func withImageConfigMutator(st llb.State, m func(context.Context, *mdispec.Docke
 			if c.Platform != nil {
 				plat = *c.Platform
 			}
-			cs.config = &mdispec.DockerOCIImage{
-				Image: ocispec.Image{
-					Platform: plat,
+			cs.config = &ImageConfig{
+				DockerOCIImage: mdispec.DockerOCIImage{
+					Image: ocispec.Image{
+						Platform: plat,
+					},
 				},
 			}
 		} else {
@@ -92,7 +119,7 @@ func withImageConfigMutator(st llb.State, m func(context.Context, *mdispec.Docke
 		}
 		// chain previous mutator to the one passed in
 		prev := cs.mutator
-		cs.mutator = func(ctx context.Context, c *mdispec.DockerOCIImage) error {
+		cs.mutator = func(ctx context.Context, c *ImageConfig) error {
 			if err := prev(ctx, c); err != nil {
 				return errtrace.Wrap(err)
 			}
@@ -127,7 +154,7 @@ func Image(ref string, opts ...llb.ImageOption) llb.State {
 			if len(capturingMetaResolver.config) == 0 {
 				return st, nil
 			}
-			var config mdispec.DockerOCIImage
+			var config ImageConfig
 			if err := json.Unmarshal(capturingMetaResolver.config, &config); err != nil {
 				return llb.State{}, errtrace.Errorf("failed to unmarshal image config: %w", err)
 			}

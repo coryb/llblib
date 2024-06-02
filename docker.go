@@ -104,7 +104,19 @@ func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (l
 	if err != nil {
 		return llb.Scratch(), errtrace.Wrap(err)
 	}
-	return withImageConfig(*state, img), nil
+	var history []History
+	for _, h := range img.History {
+		history = append(history, History{History: h})
+	}
+	imageConfig := ImageConfig{
+		DockerOCIImage: *img,
+		ContainerConfig: ContainerConfig{
+			Cmd:    img.Config.Cmd,
+			Labels: img.Config.Labels,
+		},
+		History: history,
+	}
+	return withImageConfig(*state, &imageConfig), nil
 }
 
 const (
