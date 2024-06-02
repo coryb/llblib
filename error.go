@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"braces.dev/errtrace"
+	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/errdefs"
@@ -40,6 +41,13 @@ func OnError(opts ...ContainerOption) RequestOption {
 			if err == nil {
 				return false, nil
 			}
+			if co.lock != nil {
+				co.lock.Lock()
+				defer co.lock.Unlock()
+			}
+			end := progress.Begin(LoadProgress(ctx), "running error handler")
+			defer end()
+
 			var se *errdefs.SolveError
 			if errors.As(err, &se) {
 				return co.dropErr, errtrace.Wrap(errContainer(ctx, c, se, opts...))

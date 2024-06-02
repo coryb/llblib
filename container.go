@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"syscall"
 
 	"braces.dev/errtrace"
@@ -54,6 +55,7 @@ type ContainerOptions struct {
 	// handling onError containers
 	dropErr      bool
 	entitlements []entitlements.Entitlement
+	lock         sync.Locker
 }
 
 // FdReader is an io.Reader that has a Fd file descriptor.
@@ -157,6 +159,16 @@ func WithTeardown(t func() error) ContainerOption {
 	})
 }
 
+// WithLock allows for synchronizing access to the container execution so only
+// one is ever running at at time.  This is useful with OnError to prevent
+// multiple error handlers from running at the same time when parallel solves
+// are running.
+func WithLock(l sync.Locker) ContainerOption {
+	return containerOptionFunc(func(co *ContainerOptions) {
+		co.lock = l
+	})
+}
+
 func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 	var allowedEntitlements []entitlements.Entitlement
 	tmp := ContainerOptions{}
@@ -165,6 +177,10 @@ func (s *solver) Container(root llb.State, opts ...ContainerOption) Request {
 	}
 	allowedEntitlements = tmp.entitlements
 	build := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		if tmp.lock != nil {
+			tmp.lock.Lock()
+			defer tmp.lock.Unlock()
+		}
 		ei := llb.ExecInfo{
 			State: root,
 		}
