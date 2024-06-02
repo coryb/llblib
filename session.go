@@ -34,7 +34,7 @@ type Session interface {
 }
 
 type session struct {
-	sess        *bksess.Session
+	allSessions map[bksess.Attachable]*bksess.Session
 	localDirs   map[string]string
 	attachables []bksess.Attachable
 	releasers   []func() error
@@ -56,7 +56,11 @@ func (s *session) Release() error {
 		}
 	}
 
-	return errtrace.Wrap(s.sess.Close())
+	for _, sess := range s.allSessions {
+		err = errors.Join(err, errtrace.Wrap(sess.Close()))
+	}
+
+	return err
 }
 
 func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, error) {
@@ -69,11 +73,15 @@ func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, erro
 }
 
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
+	sess := s.allSessions[req.download]
+
 	attachables := slices.Clone(s.attachables)
-	attachables = append(attachables, req.attachables...)
+	if req.download != nil {
+		attachables = append(attachables, req.download)
+	}
 
 	solveOpt := client.SolveOpt{
-		SharedSession:         s.sess,
+		SharedSession:         sess,
 		SessionPreInitialized: true,
 		LocalDirs:             s.localDirs,
 		Session:               attachables,

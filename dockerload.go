@@ -22,10 +22,8 @@ func DockerSave(ref reference.Reference, output io.WriteCloser) RequestOption {
 				"name": ref.String(),
 			},
 		})
-		r.attachables = append(r.attachables,
-			filesync.NewFSSyncTarget(
-				filesync.WithFSSync(exportIndex, outputFunc),
-			),
+		r.download = filesync.NewFSSyncTarget(
+			filesync.WithFSSync(exportIndex, outputFunc),
 		)
 	})
 }

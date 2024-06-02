@@ -27,7 +27,6 @@ import (
 	"github.com/tonistiigi/fsutil"
 	fstypes "github.com/tonistiigi/fsutil/types"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 // Solver provides functions used to create and execute buildkit solve requests.
@@ -108,7 +107,7 @@ type Request struct {
 	state        llb.State
 	cwd          string
 	exports      []client.ExportEntry
-	attachables  []bksess.Attachable
+	download     bksess.Attachable
 	evaluate     bool
 	buildFunc    func(context.Context, gateway.Client) (*gateway.Result, error)
 	onError      func(context.Context, gateway.Client, error) (dropErr bool, err error)
@@ -121,7 +120,7 @@ type solver struct {
 	mu            sync.Mutex
 	localDirs     map[string]string
 	secrets       map[string]secretsprovider.Source
-	attachables   []bksess.Attachable
+	downloads     []bksess.Attachable
 	helpers       []func(ctx context.Context) (release func() error, err error)
 	agentConfigs  map[string]sockproxy.AgentConfig
 	resolverCache *resolveImageCache
@@ -338,14 +337,14 @@ func Download(localDir string) RequestOption {
 		if !filepath.IsAbs(localDir) {
 			localDir = filepath.Join(r.cwd, localDir)
 		}
-		exportIndex := len(r.exports)
-		r.exports = append(r.exports, client.ExportEntry{
+		r.exports = []client.ExportEntry{{
 			Type:      client.ExporterLocal,
 			OutputDir: localDir,
-		})
-		r.attachables = append(r.attachables, filesync.NewFSSyncTarget(
-			filesync.WithFSSyncDir(exportIndex, localDir),
-		))
+		}}
+		r.download = filesync.NewFSSyncTarget(
+			// TODO allow for multiple exports
+			filesync.WithFSSyncDir(0, localDir),
+		)
 	})
 }
 
@@ -357,9 +356,11 @@ func (s *solver) Build(st llb.State, opts ...RequestOption) Request {
 	for _, opt := range opts {
 		opt.SetRequestOption(&r)
 	}
-	s.mu.Lock()
-	s.attachables = append(s.attachables, r.attachables...)
-	s.mu.Unlock()
+	if r.download != nil {
+		s.mu.Lock()
+		s.downloads = append(s.downloads, r.download)
+		s.mu.Unlock()
+	}
 	return r
 }
 
@@ -400,7 +401,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		}
 		releasers = append(releasers, release)
 	}
-	attachables := slices.Clone(s.attachables)
+	attachables := []bksess.Attachable{}
 
 	dirSource := filesync.StaticDirSource{}
 	if len(s.localDirs) > 0 {
@@ -446,33 +447,52 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
 	attachables = append(attachables, authprovider.NewDockerAuthProvider(dockerConfig, nil))
 
-	bkSess, err := bksess.NewSession(ctx, "llblib", "")
-	if err != nil {
-		return nil, errtrace.Errorf("failed to create buildkit session: %w", err)
-	}
-	for _, a := range attachables {
-		bkSess.Allow(a)
-	}
-	waiter := make(chan struct{})
-	go func() {
-		bkSess.Run(ctx, func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
-			conn, err := cln.Dialer()(ctx, proto, meta)
-			return &aliveConnWaiter{Conn: conn, alive: waiter}, errtrace.Wrap(err)
-		})
-	}()
-
-	// ensure session is running
-	select {
-	case <-ctx.Done():
-		return nil, errtrace.Wrap(ctx.Err())
-	case <-waiter:
+	// for each download we need a uniq session.  This is a hack, there has been
+	// some discussion for buildkit to have a session manager available to the
+	// client to manage this eventually.
+	allSessions := map[bksess.Attachable]*bksess.Session{}
+	for _, attach := range append([]bksess.Attachable{nil}, s.downloads...) {
+		bkSess, err := bksess.NewSession(ctx, "llblib", "")
+		if err != nil {
+			return nil, errtrace.Errorf("failed to create buildkit session: %w", err)
+		}
+		for _, a := range attachables {
+			bkSess.Allow(a)
+		}
+		if attach != nil {
+			bkSess.Allow(attach)
+		}
+		allSessions[attach] = bkSess
 	}
 
-	resolver := newResolver(cln, s.resolverCache, bkSess, p)
+	waiters := []chan struct{}{}
+
+	for _, bkSess := range allSessions {
+		bkSess := bkSess
+		alive := make(chan struct{})
+		waiters = append(waiters, alive)
+		go func() {
+			bkSess.Run(ctx, func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
+				conn, err := cln.Dialer()(ctx, proto, meta)
+				return &aliveConnWaiter{Conn: conn, alive: alive}, err
+			})
+		}()
+	}
+
+	// ensure all sessions are running
+	for _, waiter := range waiters {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-waiter:
+		}
+	}
+
+	resolver := newResolver(cln, s.resolverCache, allSessions[nil], p)
 
 	localDirs := maps.Clone(s.localDirs)
 	return &session{
-		sess:        bkSess,
+		allSessions: allSessions,
 		attachables: attachables,
 		releasers:   releasers,
 		client:      cln,
