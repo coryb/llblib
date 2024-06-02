@@ -137,12 +137,15 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			Definition: def.ToPB(),
 		}
 		res, err := c.Solve(ctx, gwReq)
-		if err != nil && req.onError != nil {
-			dropErr, moreErr := req.onError(ctx, c, err)
-			if dropErr {
-				return nil, errtrace.Wrap(moreErr)
+		if err != nil {
+			if req.onError != nil {
+				dropErr, moreErr := req.onError(ctx, c, err)
+				if dropErr {
+					return nil, errtrace.Wrap(moreErr)
+				}
+				return nil, errors.Join(err, errtrace.Wrap(moreErr))
 			}
-			return nil, errors.Join(err, errtrace.Wrap(moreErr))
+			return nil, errtrace.Wrap(err)
 		}
 		if spec, err := imageConfig(ctx, req.state); err != nil {
 			return nil, errtrace.Wrap(err)
@@ -151,13 +154,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			if err != nil {
 				return nil, errtrace.Wrap(err)
 			}
-		}
-		if res != nil && res.Metadata != nil {
-			if _, ok := res.Metadata[exptypes.ExporterImageConfigKey]; !ok {
-				// overwrite the image config with our preserve image config
-				// so we collect additional metatdata
-				res.AddMeta(exptypes.ExporterImageConfigKey, imageconfig)
-			}
+			res.AddMeta(exptypes.ExporterImageConfigKey, imageconfig)
 		}
 		return res, errtrace.Wrap(err)
 	}, prog.Channel())
