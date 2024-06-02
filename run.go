@@ -23,8 +23,20 @@ func (ro RunOptions) SetRunOption(ei *llb.ExecInfo) {
 // prevent any cache from being written from the state, so the Run operation
 // will be executed multiple times within a session if the session evaluates the
 // same vertex multiple times.
-func IgnoreCache() llb.RunOption {
-	return llb.AddEnv("LLBLIB_IGNORE_CACHE", identity.NewID())
+var IgnoreCache = ignoreCache{}
+
+type ignoreCache struct{}
+
+func (ignoreCache) SetRunOption(ei *llb.ExecInfo) {
+	llb.AddEnv("LLBLIB_IGNORE_CACHE", identity.NewID()).SetRunOption(ei)
+}
+
+func (ignoreCache) SetDockerfileOption(do *dockerfileOpts) {
+	do.frontendOpts["no-cache"] = ""
+}
+
+func (ignoreCache) SetFrontendOption(fo *frontendOptions) {
+	fo.Opts["no-cache"] = ""
 }
 
 type copyOptionFunc func(*llb.CopyInfo)
