@@ -88,7 +88,8 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		AllowedEntitlements:   req.entitlements,
 	}
 
-	ctx = WithProgress(ctx, s.progress)
+	prog := s.progress.Label(req.Label)
+	ctx = WithProgress(ctx, prog)
 	ctx = WithSession(ctx, s)
 
 	if req.buildFunc != nil {
@@ -102,7 +103,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 				return nil, errors.Join(err, errtrace.Wrap(moreErr))
 			}
 			return res, errtrace.Wrap(err)
-		}, s.progress.Channel(progress.AddLabel(req.Label)))
+		}, prog.Channel())
 		if err != nil {
 			return nil, errtrace.Errorf("build failed: %w", err)
 		}
@@ -158,7 +159,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			}
 		}
 		return res, errtrace.Wrap(err)
-	}, s.progress.Channel(progress.AddLabel(req.Label)))
+	}, prog.Channel())
 	if err != nil {
 		return nil, errtrace.Errorf("solve failed: %w", err)
 	}
