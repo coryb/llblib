@@ -146,7 +146,7 @@ func TestYAML(t *testing.T) {
 			`),
 			llb.Scratch(),
 			llblib.WithTarget("download"),
-			llblib.WithTargetPlatform(&ocispec.Platform{
+			llblib.WithTargetPlatform(ocispec.Platform{
 				OS: "linux", Architecture: "arm64",
 			}),
 		)),
@@ -161,7 +161,7 @@ func TestYAML(t *testing.T) {
 				RUN echo hi
 			`),
 			llb.Scratch(),
-			llblib.WithTargetPlatform(&ocispec.Platform{
+			llblib.WithTargetPlatform(ocispec.Platform{
 				OS: "linux", Architecture: "arm64",
 			}),
 		)),

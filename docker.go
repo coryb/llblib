@@ -53,9 +53,9 @@ func WithBuildArg(k, v string) DockerfileOption {
 }
 
 // WithTargetPlatform will set the platform for the Dockerfile build.
-func WithTargetPlatform(p *ocispec.Platform) DockerfileOption {
+func WithTargetPlatform(p ocispec.Platform) DockerfileOption {
 	return dockerfileOptionFunc(func(o *dockerfileOpts) {
-		o.TargetPlatform = p
+		o.TargetPlatform = &p
 	})
 }
 

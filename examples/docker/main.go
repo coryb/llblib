@@ -33,7 +33,7 @@ func main() {
 	context := llb.Scratch().File(llb.Mkfile("foobar", 0o644, []byte("something")))
 
 	root := llblib.Dockerfile([]byte(dockerfile), context,
-		llblib.WithTargetPlatform(&p),
+		llblib.WithTargetPlatform(p),
 	)
 
 	req := slv.Container(root,

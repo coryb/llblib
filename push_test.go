@@ -126,7 +126,7 @@ func TestRegistryPushDockerfile(t *testing.T) {
 		[]byte(dockerfile),
 		llb.Scratch(),
 		llblib.WithTarget("download"),
-		llblib.WithTargetPlatform(&currentPlatform),
+		llblib.WithTargetPlatform(currentPlatform),
 	)
 
 	req := r.Solver.Build(
