@@ -33,8 +33,8 @@ func main() {
 	}
 
 	p := llblib.Persistent(root, mounts)
-	p.Run(llb.Shlex("touch /scratch/scratch-foobar"), llblib.IgnoreCache())
-	p.Run(llb.Shlex("touch /src/src-foobar"), llblib.IgnoreCache())
+	p.Run(llb.Shlex("touch /scratch/scratch-foobar"), llblib.IgnoreCache)
+	p.Run(llb.Shlex("touch /src/src-foobar"), llblib.IgnoreCache)
 	p.Run(llb.Shlex("false")) // <- trigger /bin/bash on error
 
 	scratch, ok := p.GetMount("/scratch")

@@ -12,6 +12,13 @@ config:
             - CMD
             - /bin/true
         Timeout: 5e+09
+container_config:
+    Cmd:
+        - /bin/sh
+        - -c
+        - '#(nop) '
+        - CMD ["/bin/sh"]
+    Labels: {}
 created: "0001-01-01T00:00:00Z"
 history:
     - created: "2024-05-22T18:18:11.872913732Z"

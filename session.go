@@ -34,7 +34,7 @@ type Session interface {
 }
 
 type session struct {
-	sess        *bksess.Session
+	allSessions map[bksess.Attachable]*bksess.Session
 	localDirs   map[string]string
 	attachables []bksess.Attachable
 	releasers   []func() error
@@ -56,7 +56,11 @@ func (s *session) Release() error {
 		}
 	}
 
-	return errtrace.Wrap(s.sess.Close())
+	for _, sess := range s.allSessions {
+		err = errors.Join(err, errtrace.Wrap(sess.Close()))
+	}
+
+	return err
 }
 
 func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, error) {
@@ -69,19 +73,25 @@ func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, erro
 }
 
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
+	sess := s.allSessions[req.download]
+
 	attachables := slices.Clone(s.attachables)
-	attachables = append(attachables, req.attachables...)
+	if req.download != nil {
+		attachables = append(attachables, req.download)
+	}
 
 	solveOpt := client.SolveOpt{
-		SharedSession:         s.sess,
+		SharedSession:         sess,
 		SessionPreInitialized: true,
 		LocalDirs:             s.localDirs,
 		Session:               attachables,
 		AllowedEntitlements:   req.entitlements,
 	}
 
-	ctx = WithProgress(ctx, s.progress)
+	prog := s.progress.Label(req.Label)
+	ctx = WithProgress(ctx, prog)
 	ctx = WithSession(ctx, s)
+	ctx = withSessionID(ctx, sess.ID())
 
 	if req.buildFunc != nil {
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
@@ -94,7 +104,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 				return nil, errors.Join(err, errtrace.Wrap(moreErr))
 			}
 			return res, errtrace.Wrap(err)
-		}, s.progress.Channel(progress.AddLabel(req.Label)))
+		}, prog.Channel())
 		if err != nil {
 			return nil, errtrace.Errorf("build failed: %w", err)
 		}
@@ -127,12 +137,15 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			Definition: def.ToPB(),
 		}
 		res, err := c.Solve(ctx, gwReq)
-		if err != nil && req.onError != nil {
-			dropErr, moreErr := req.onError(ctx, c, err)
-			if dropErr {
-				return nil, errtrace.Wrap(moreErr)
+		if err != nil {
+			if req.onError != nil {
+				dropErr, moreErr := req.onError(ctx, c, err)
+				if dropErr {
+					return nil, errtrace.Wrap(moreErr)
+				}
+				return nil, errors.Join(err, errtrace.Wrap(moreErr))
 			}
-			return nil, errors.Join(err, errtrace.Wrap(moreErr))
+			return nil, errtrace.Wrap(err)
 		}
 		if spec, err := imageConfig(ctx, req.state); err != nil {
 			return nil, errtrace.Wrap(err)
@@ -141,16 +154,10 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			if err != nil {
 				return nil, errtrace.Wrap(err)
 			}
-		}
-		if res != nil && res.Metadata != nil {
-			if _, ok := res.Metadata[exptypes.ExporterImageConfigKey]; !ok {
-				// overwrite the image config with our preserve image config
-				// so we collect additional metatdata
-				res.AddMeta(exptypes.ExporterImageConfigKey, imageconfig)
-			}
+			res.AddMeta(exptypes.ExporterImageConfigKey, imageconfig)
 		}
 		return res, errtrace.Wrap(err)
-	}, s.progress.Channel(progress.AddLabel(req.Label)))
+	}, prog.Channel())
 	if err != nil {
 		return nil, errtrace.Errorf("solve failed: %w", err)
 	}

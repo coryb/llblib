@@ -4,6 +4,10 @@ config:
         - /bin/true
     Env:
         - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+container_config:
+    Cmd:
+        - /bin/true
+    Labels: {}
 created: "0001-01-01T00:00:00Z"
 history:
     - created: "2024-05-22T18:18:11.872913732Z"

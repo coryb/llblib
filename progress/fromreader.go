@@ -26,16 +26,18 @@ func FromReader(p Progress, name string, rc io.ReadCloser) {
 	ch := p.Channel()
 	defer close(ch)
 
+	// copy before send to avoid parallel updates to our vertex pointer
+	vtx2 := vtx
+
 	ch <- &client.SolveStatus{
 		Vertexes: []*client.Vertex{&vtx},
 	}
 
-	tm2 := time.Now()
-	vtx2 := vtx
-	vtx2.Completed = &tm2
 	if _, err := io.Copy(io.Discard, rc); err != nil {
 		vtx2.Error = err.Error()
 	}
+	tm2 := time.Now()
+	vtx2.Completed = &tm2
 	ch <- &client.SolveStatus{
 		Vertexes: []*client.Vertex{&vtx2},
 	}

@@ -37,7 +37,7 @@ func main() {
 		llblib.Run(root,
 			llb.Shlex("curl -sf --unix /tmp/forward.sock -v http://unix -o /tmp/special"),
 			slv.Forward("tcp://127.0.0.1:1234", "/tmp/forward.sock"),
-			llblib.IgnoreCache(),
+			llblib.IgnoreCache,
 		).Run(
 			llb.Args([]string{"sh", "-c", `test "$(cat /tmp/special)" = "message-from-host"`}),
 		).Root(),

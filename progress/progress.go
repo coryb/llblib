@@ -6,10 +6,13 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/opencontainers/go-digest"
 )
 
 // Progress defines functions for a buildkit progress display.
@@ -52,6 +55,13 @@ func WithOutput(w io.Writer) Option {
 	})
 }
 
+// WithMode is used to set the display mode for the progress.
+func WithMode(m progressui.DisplayMode) Option {
+	return progressOptionFunc(func(p *progress) {
+		p.mode = m
+	})
+}
+
 // NewProgress creates a new Progress display to use with buildkit solves.
 // Close MUST be called on the returned progress to clean-up resources.
 func NewProgress(opts ...Option) Progress {
@@ -60,6 +70,7 @@ func NewProgress(opts ...Option) Progress {
 		done:     make(chan error),
 		writer:   os.Stdout,
 		seen:     map[seenKey]struct{}{},
+		mode:     progressui.DefaultMode,
 	}
 	p.childCond.L = &p.mu
 	for _, opt := range opts {
@@ -67,6 +78,36 @@ func NewProgress(opts ...Option) Progress {
 	}
 	p.start()
 	return p
+}
+
+// Begin will send a new message to the running progress.  The returned function
+// MUST be called to ensure the message is marked as completed.
+func Begin(p Progress, message string) (end func()) {
+	ch := p.Channel()
+
+	dgst := digest.FromBytes([]byte(identity.NewID()))
+	tm := time.Now()
+
+	vtx := client.Vertex{
+		Digest:  dgst,
+		Name:    message,
+		Started: &tm,
+	}
+	// copy so we can send a new vertex on completion
+	vtx2 := vtx
+
+	ch <- &client.SolveStatus{
+		Vertexes: []*client.Vertex{&vtx},
+	}
+
+	return func() {
+		defer close(ch)
+		tm2 := time.Now()
+		vtx2.Completed = &tm2
+		ch <- &client.SolveStatus{
+			Vertexes: []*client.Vertex{&vtx2},
+		}
+	}
 }
 
 type seenKey struct {
@@ -78,6 +119,7 @@ type seenKey struct {
 type progress struct {
 	statusCh chan *client.SolveStatus
 	writer   io.Writer
+	mode     progressui.DisplayMode
 
 	children  int
 	childCond sync.Cond
@@ -90,7 +132,7 @@ type progress struct {
 
 func (p *progress) start() {
 	go func() {
-		d, err := progressui.NewDisplay(p.writer, progressui.DefaultMode)
+		d, err := progressui.NewDisplay(p.writer, p.mode)
 		if err == nil {
 			_, err = d.UpdateFrom(context.Background(), p.statusCh)
 		}
@@ -238,6 +280,18 @@ func (p labeledProgress) Channel(opts ...ChannelOption) chan *client.SolveStatus
 		opts = append([]ChannelOption{AddLabel(p.label)}, opts...)
 	}
 	return p.Progress.Channel(opts...)
+}
+
+// if we label an labeledProgress we should just append the new label to the
+// existing label and return a new progress.
+func (p labeledProgress) Label(l string) Progress {
+	if p.label != "" && l != "" {
+		l = p.label + " " + l
+	}
+	return labeledProgress{
+		Progress: p.Progress,
+		label:    l,
+	}
 }
 
 func (p labeledProgress) Close() error {

@@ -36,7 +36,7 @@ func TestDockerfile(t *testing.T) {
 		[]byte(dockerfile),
 		llb.Scratch(),
 		llblib.WithTarget("download"),
-		llblib.WithTargetPlatform(&linux),
+		llblib.WithTargetPlatform(linux),
 	)
 
 	tdir := t.TempDir()
@@ -80,7 +80,7 @@ RUN false # <- should not run
 		[]byte(dockerfile),
 		llb.Scratch(),
 		llblib.WithTarget("download"),
-		llblib.WithTargetPlatform(&linux),
+		llblib.WithTargetPlatform(linux),
 		llblib.WithBuildArg("MSG", "custom"),
 	)
 
@@ -135,14 +135,14 @@ func TestDockerfileBuildContexts(t *testing.T) {
 	st1 := llblib.Dockerfile(
 		[]byte(dockerfile1),
 		llb.Scratch().File(llb.Mkfile("file1", 0o644, nil)),
-		llblib.WithTargetPlatform(&linux),
+		llblib.WithTargetPlatform(linux),
 		llblib.WithBuildContext("extra", r.Solver.Local(tdir)),
 	)
 
 	st := llblib.Dockerfile(
 		[]byte(dockerfile2),
 		llb.Scratch().File(llb.Mkfile("file3", 0o644, nil)),
-		llblib.WithTargetPlatform(&linux),
+		llblib.WithTargetPlatform(linux),
 		llblib.WithBuildContext("extra", st1),
 	)
 
@@ -178,7 +178,7 @@ func TestDockerfileRunMounts(t *testing.T) {
 	st := llblib.Dockerfile(
 		[]byte(dockerfile),
 		llb.Scratch(),
-		llblib.WithTargetPlatform(&linux),
+		llblib.WithTargetPlatform(linux),
 		llblib.WithBuildContext("my.input", r.Solver.Local(inputDir)),
 		llblib.WithBuildContext("my.cache", r.Solver.Local(inputDir)),
 	)

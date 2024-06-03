@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	mdispec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 )
 
 // Digest returns the digest for the state.
@@ -24,20 +26,45 @@ func Digest(st llb.State) (digest.Digest, error) {
 }
 
 type layerHistory struct {
-	empty bool
-	desc  string
+	empty     bool
+	desc      string
+	sessionID string
 }
 
-func commitHistory(img *mdispec.DockerOCIImage, commit layerHistory) {
-	img.History = append(img.History, ocispec.History{
-		// Set a zero value on Created for more reproducible builds
-		Created:    &time.Time{},
-		CreatedBy:  commit.desc,
-		Comment:    "llblib.v0",
-		EmptyLayer: commit.empty,
+func commitHistory(img *ImageConfig, commit layerHistory) {
+	img.History = append(img.History, History{
+		History: ocispec.History{
+			// Set a zero value on Created for more reproducible builds
+			Created:    &time.Time{},
+			CreatedBy:  commit.desc,
+			Comment:    "llblib.v0",
+			EmptyLayer: commit.empty,
+		},
+		sessionID: commit.sessionID,
 	})
 	// Set a zero value on Created for more reproducible builds
 	img.Created = &time.Time{}
+}
+
+// commitHistoryKV will add key/value instructions to the image history, if
+// the most recent history record is for the same instruction and created within
+// the current session then we will append the key/value to the existing record.
+func commitHistoryKV(ctx context.Context, img *ImageConfig, instruction, key, value string) {
+	// In Dockerfile for some instructions (ENV, LABEL) multiple values can be
+	// specified in one instruction leading to one history element.  This checks
+	// if the previous history committed was also the same instruction, in which
+	// case it should just add to the previous history element.
+	sessID := sessionID(ctx)
+	numHistory := len(img.History)
+	if numHistory > 0 && strings.HasPrefix(img.History[numHistory-1].CreatedBy, instruction) && img.History[numHistory-1].sessionID == sessID {
+		img.History[numHistory-1].CreatedBy += " " + shellquote.Join(key) + "=" + shellquote.Join(value)
+	} else {
+		commitHistory(img, layerHistory{
+			empty:     true,
+			desc:      instruction + " " + shellquote.Join(key) + "=" + shellquote.Join(value),
+			sessionID: sessID,
+		})
+	}
 }
 
 // Merge is similar to llb.Merge but also commits history to the image config.
@@ -72,7 +99,7 @@ func Merge(states []llb.State, opts ...llb.ConstraintsOpt) llb.State {
 			msgs = append(msgs, dgst.Encoded()+":/")
 		}
 
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			commitHistory(img, layerHistory{
 				empty: false,
 				desc:  "MERGE " + strings.Join(msgs, " "),
@@ -93,13 +120,16 @@ func Diff(lower, upper llb.State, opts ...llb.ConstraintsOpt) llb.State {
 		if err != nil {
 			return llb.State{}, errtrace.Wrap(err)
 		}
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Author = ""
 			img.RootFS = ocispec.RootFS{}
 			img.Config = mdispec.DockerOCIImageConfig{
 				ImageConfig: ocispec.ImageConfig{
 					Labels: img.Config.Labels,
 				},
+			}
+			img.ContainerConfig = ContainerConfig{
+				Labels: img.ContainerConfig.Labels,
 			}
 
 			commitHistory(img, layerHistory{
@@ -123,7 +153,7 @@ func Run(st llb.State, opts ...llb.RunOption) llb.ExecState {
 		if err != nil {
 			return llb.State{}, fmt.Errorf("failed to get args from state for history: %w", err)
 		}
-		return withImageConfigMutator(st, func(ctx context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(ctx context.Context, img *ImageConfig) error {
 			commitHistory(img, layerHistory{
 				empty: false,
 				desc:  "RUN " + shellquote.Join(args...),
@@ -159,7 +189,7 @@ func Copy(src llb.State, srcPath, destPath string, opts ...llb.CopyOption) llb.S
 			if err != nil {
 				return llb.State{}, errtrace.Wrap(err)
 			}
-			return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+			return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 				commitHistory(img, layerHistory{
 					empty: false,
 					desc:  shellquote.Join("COPY", dgst.Encoded()+":"+srcPath, destPath),
@@ -175,7 +205,7 @@ func Copy(src llb.State, srcPath, destPath string, opts ...llb.CopyOption) llb.S
 func DefaultDir(d string) llb.StateOption {
 	return func(st llb.State) llb.State {
 		st = st.Dir(d)
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.WorkingDir = d
 			commitHistory(img, layerHistory{
 				empty: true,
@@ -191,7 +221,7 @@ func DefaultDir(d string) llb.StateOption {
 func DefaultUser(u string) llb.StateOption {
 	return func(st llb.State) llb.State {
 		st = st.User(u)
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.User = u
 			commitHistory(img, layerHistory{
 				empty: true,
@@ -207,21 +237,9 @@ func DefaultUser(u string) llb.StateOption {
 func AddDefaultEnv(key, value string) llb.StateOption {
 	return func(st llb.State) llb.State {
 		st = st.AddEnv(key, value)
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(ctx context.Context, img *ImageConfig) error {
 			img.Config.Env = append(img.Config.Env, key+"="+value)
-			// In Dockerfile, multiple ENV can be specified in the same ENV command
-			// leading to one history element. This checks if the previous history
-			// committed was also an ENV, in which case it should just add to the
-			// previous history element.
-			numHistory := len(img.History)
-			if numHistory > 0 && strings.HasPrefix(img.History[numHistory-1].CreatedBy, "ENV") {
-				img.History[numHistory-1].CreatedBy += " " + shellquote.Join(key) + "=" + shellquote.Join(value)
-			} else {
-				commitHistory(img, layerHistory{
-					empty: true,
-					desc:  "ENV " + shellquote.Join(key) + "=" + shellquote.Join(value),
-				})
-			}
+			commitHistoryKV(ctx, img, "ENV", key, value)
 			return nil
 		})
 	}
@@ -230,7 +248,7 @@ func AddDefaultEnv(key, value string) llb.StateOption {
 // Entrypoint records the ENTRYPOINT to image config.
 func Entrypoint(entrypoint ...string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.Entrypoint = entrypoint
 			out, err := json.Marshal(entrypoint)
 			if err != nil {
@@ -248,8 +266,9 @@ func Entrypoint(entrypoint ...string) llb.StateOption {
 // Cmd records the CMD command arguments to the image config.
 func Cmd(cmd ...string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.Cmd = cmd
+			img.ContainerConfig.Cmd = cmd // legacy
 			out, err := json.Marshal(cmd)
 			if err != nil {
 				return fmt.Errorf("failed to marshal CMD as json: %w", err)
@@ -266,9 +285,12 @@ func Cmd(cmd ...string) llb.StateOption {
 // AddLabel records a LABEL to the image config.
 func AddLabel(key, value string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(ctx context.Context, img *ImageConfig) error {
 			if img.Config.Labels == nil {
 				img.Config.Labels = make(map[string]string)
+			}
+			if img.ContainerConfig.Labels == nil {
+				img.ContainerConfig.Labels = make(map[string]string)
 			}
 
 			if curVal, ok := img.Config.Labels[key]; ok && curVal == value {
@@ -277,29 +299,29 @@ func AddLabel(key, value string) llb.StateOption {
 			}
 
 			img.Config.Labels[key] = value
-
-			// In Dockerfile, multiple labels can be specified in the same LABEL command
-			// leading to one history element. This checks if the previous history
-			// committed was also a label, in which case it should just add to the
-			// previous history element.
-			numHistory := len(img.History)
-			if numHistory > 0 && strings.HasPrefix(img.History[numHistory-1].CreatedBy, "LABEL") {
-				img.History[numHistory-1].CreatedBy += " " + shellquote.Join(key) + "=" + shellquote.Join(value)
-			} else {
-				commitHistory(img, layerHistory{
-					empty: true,
-					desc:  "LABEL " + shellquote.Join(key) + "=" + shellquote.Join(value),
-				})
-			}
+			img.ContainerConfig.Labels[key] = value // legacy
+			commitHistoryKV(ctx, img, "LABEL", key, value)
 			return nil
 		})
+	}
+}
+
+// AddLabels records a LABEL to the image config.
+func AddLabels(labels map[string]string) llb.StateOption {
+	return func(st llb.State) llb.State {
+		keys := maps.Keys(labels)
+		sort.Strings(keys)
+		for _, key := range keys {
+			st = AddLabel(key, labels[key])(st)
+		}
+		return st
 	}
 }
 
 // AddExposedPort records an EXPOSE port to the image config.
 func AddExposedPort(port string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			if img.Config.ExposedPorts == nil {
 				img.Config.ExposedPorts = make(map[string]struct{})
 			}
@@ -320,7 +342,7 @@ func AddExposedPort(port string) llb.StateOption {
 // AddVolume records a VOLUME to the image config.
 func AddVolume(mountpoint string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			if img.Config.Volumes == nil {
 				img.Config.Volumes = make(map[string]struct{})
 			}
@@ -341,7 +363,7 @@ func AddVolume(mountpoint string) llb.StateOption {
 // StopSignal records the STOPSIGNAL to the image config.
 func StopSignal(signal string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.StopSignal = signal
 			commitHistory(img, layerHistory{
 				empty: true,
@@ -355,7 +377,7 @@ func StopSignal(signal string) llb.StateOption {
 // DockerHealthcheck records the HEALTHCHECK configuration to the image config.
 func DockerHealthcheck(hc mdispec.HealthcheckConfig) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.Healthcheck = &hc
 			out, err := json.Marshal(hc)
 			if err != nil {
@@ -373,7 +395,7 @@ func DockerHealthcheck(hc mdispec.HealthcheckConfig) llb.StateOption {
 // AddDockerOnBuild records the ONBUILD instruction to the image config.
 func AddDockerOnBuild(instruction string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.OnBuild = append(img.Config.OnBuild, instruction)
 			commitHistory(img, layerHistory{
 				empty: true,
@@ -387,7 +409,7 @@ func AddDockerOnBuild(instruction string) llb.StateOption {
 // DockerRunShell sets the SHELL for the image config.
 func DockerRunShell(shell ...string) llb.StateOption {
 	return func(st llb.State) llb.State {
-		return withImageConfigMutator(st, func(_ context.Context, img *mdispec.DockerOCIImage) error {
+		return withImageConfigMutator(st, func(_ context.Context, img *ImageConfig) error {
 			img.Config.Shell = shell
 			out, err := json.Marshal(shell)
 			if err != nil {
