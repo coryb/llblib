@@ -64,7 +64,6 @@ func (s *session) Release() error {
 }
 
 func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, error) {
-	ctx = WithSession(ctx, s)
 	states := []llb.State{}
 	for _, req := range reqs {
 		states = append(states, req.state)
@@ -72,8 +71,23 @@ func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, erro
 	return errtrace.Wrap2(ToYAML(ctx, states...))
 }
 
+func anyValue[K comparable, V any](m map[K]V) V {
+	var zero V
+	for _, v := range m {
+		return v
+	}
+	return zero
+}
+
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
-	sess := s.allSessions[req.download]
+	// default to a random session, but if there is a download attachable
+	// for this request we need to use that specific session (only one download
+	// attachable per session is supported by buildkit)
+	sess := anyValue(s.allSessions)
+
+	if req.download != nil {
+		sess = s.allSessions[req.download]
+	}
 
 	attachables := slices.Clone(s.attachables)
 	if req.download != nil {
@@ -90,11 +104,12 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 
 	prog := s.progress.Label(req.Label)
 	ctx = WithProgress(ctx, prog)
-	ctx = WithSession(ctx, s)
+	ctx = WithImageResolver(ctx, s.resolver)
 	ctx = withSessionID(ctx, sess.ID())
 
 	if req.buildFunc != nil {
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+			ctx = withGatewayClient(ctx, c)
 			res, err := req.buildFunc(ctx, c)
 			if err != nil && req.onError != nil {
 				dropErr, moreErr := req.onError(ctx, c, err)
@@ -109,11 +124,6 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			return nil, errtrace.Errorf("build failed: %w", err)
 		}
 		return res, nil
-	}
-
-	def, err := req.state.Marshal(ctx)
-	if err != nil {
-		return nil, errtrace.Errorf("failed to marshal state: %w", err)
 	}
 
 	solveOpt.Exports = slices.Clone(req.exports)
@@ -132,6 +142,13 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 
 	var imageconfig []byte
 	res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		ctx = withGatewayClient(ctx, c)
+
+		def, err := req.state.Marshal(ctx)
+		if err != nil {
+			return nil, errtrace.Errorf("failed to marshal state: %w", err)
+		}
+
 		gwReq := gateway.SolveRequest{
 			Evaluate:   req.evaluate,
 			Definition: def.ToPB(),

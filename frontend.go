@@ -96,77 +96,66 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 			opt.SetFrontendOption(&fo)
 		}
 
-		sess := LoadSession(ctx)
-		if sess == nil {
-			return llb.Scratch(), errtrace.New("frontend solve request without active session")
-		}
-
 		var constrainOpt llb.ConstraintsOpt = constraintsToOptions{
 			source: constraints,
 			opts:   fo.ConstraintsOpts,
 		}
 
 		var result llb.State
-		req := Request{
-			buildFunc: func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-				inputs := map[string]*pb.Definition{}
-				for name, input := range fo.Inputs {
-					def, err := input.Marshal(ctx, constrainOpt)
-					if err != nil {
-						return nil, errtrace.Wrap(err)
-					}
-					// only add inputs that are non-nil (ie dont add scratch)
-					// because otherwise we will get a solve error:
-					// cannot marshal empty definition op
-					if def.Def != nil {
-						inputs[name] = def.ToPB()
-					}
-				}
-				req := gateway.SolveRequest{
-					Frontend:       frontend,
-					FrontendOpt:    fo.Opts,
-					FrontendInputs: inputs,
-				}
-				res, err := c.Solve(ctx, req)
-				if err != nil {
-					return nil, errtrace.Errorf("failed to solve frontend request: %w", err)
-				}
-
-				ref, err := res.SingleRef()
-				if err != nil {
-					return nil, errtrace.Errorf("failed to extract ref from frontend request: %w", err)
-				}
-				if ref == nil {
-					result = llb.Scratch()
-				} else {
-					result, err = ref.ToState()
-					if err != nil {
-						return nil, errtrace.Errorf("failed to convert ref to state: %w", err)
-					}
-					if config, ok := res.Metadata["containerimage.config"]; ok {
-						result, err = result.WithImageConfig(config)
-						if err != nil {
-							return nil, errtrace.Errorf("failed to apply image config from frontend request: %w", err)
-						}
-						// we need to parse the document again bc WithImageConfig
-						// does not apply the USER config.
-						var img ImageConfig
-						if err := json.Unmarshal(config, &img); err != nil {
-							return nil, errtrace.Errorf("failed to parse config from frontend request: %w", err)
-						}
-						img.ContainerConfig = imageConfigToContainerConfig(img)
-
-						result = withImageConfig(result, &img)
-						if img.Config.User != "" {
-							result = result.User(img.Config.User)
-						}
-					}
-				}
-				return nil, nil
-			},
+		c := gatewayClient(ctx)
+		inputs := map[string]*pb.Definition{}
+		for name, input := range fo.Inputs {
+			def, err := input.Marshal(ctx, constrainOpt)
+			if err != nil {
+				return llb.State{}, errtrace.Wrap(err)
+			}
+			// only add inputs that are non-nil (ie dont add scratch)
+			// because otherwise we will get a solve error:
+			// cannot marshal empty definition op
+			if def.Def != nil {
+				inputs[name] = def.ToPB()
+			}
 		}
-		_, err := sess.Do(ctx, req)
+		req := gateway.SolveRequest{
+			Frontend:       frontend,
+			FrontendOpt:    fo.Opts,
+			FrontendInputs: inputs,
+		}
+		res, err := c.Solve(ctx, req)
+		if err != nil {
+			return llb.State{}, errtrace.Errorf("failed to solve frontend request: %w", err)
+		}
 
+		ref, err := res.SingleRef()
+		if err != nil {
+			return llb.State{}, errtrace.Errorf("failed to extract ref from frontend request: %w", err)
+		}
+		if ref == nil {
+			result = llb.Scratch()
+		} else {
+			result, err = ref.ToState()
+			if err != nil {
+				return llb.State{}, errtrace.Errorf("failed to convert ref to state: %w", err)
+			}
+			if config, ok := res.Metadata["containerimage.config"]; ok {
+				result, err = result.WithImageConfig(config)
+				if err != nil {
+					return llb.State{}, errtrace.Errorf("failed to apply image config from frontend request: %w", err)
+				}
+				// we need to parse the document again bc WithImageConfig
+				// does not apply the USER config.
+				var img ImageConfig
+				if err := json.Unmarshal(config, &img); err != nil {
+					return llb.State{}, errtrace.Errorf("failed to parse config from frontend request: %w", err)
+				}
+				img.ContainerConfig = imageConfigToContainerConfig(img)
+
+				result = withImageConfig(result, &img)
+				if img.Config.User != "" {
+					result = result.User(img.Config.User)
+				}
+			}
+		}
 		return result, errtrace.Wrap(err)
 	})
 }

@@ -34,6 +34,15 @@ func newResolver(cln *client.Client, cache *resolveImageCache, sess *bksess.Sess
 
 func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
 	return errtrace.Wrap4(r.cache.lookup(ctx, ref, opt, func() (string, digest.Digest, []byte, error) {
+		// short-circuit if we have a gateway client
+		if c := gatewayClient(ctx); c != nil {
+			return errtrace.Wrap4(c.ResolveImageConfig(ctx, ref, opt))
+		}
+		// prefer progress from context
+		p := LoadProgress(ctx)
+		if _, ok := p.(nullProgress); ok {
+			p = r.prog
+		}
 		opts := client.SolveOpt{}
 		if r.sess != nil {
 			opts.SharedSession = r.sess
@@ -51,7 +60,7 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourc
 		_, buildErr := r.cln.Build(ctx, opts, "resolver", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			ref, d, config, err = c.ResolveImageConfig(ctx, ref, opt)
 			return nil, nil
-		}, r.prog.Channel())
+		}, p.Channel())
 		if buildErr != nil {
 			return "", "", nil, errtrace.Wrap(buildErr)
 		}

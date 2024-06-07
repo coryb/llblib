@@ -210,15 +210,13 @@ func TestYAML(t *testing.T) {
 		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {
 			t.Parallel()
-			sess := r.Session(t)
-			ctx := llblib.WithSession(r.Context, sess)
 
 			file := filepath.Join("test-data", tt.expected+".yaml")
 			expected, err := os.ReadFile(file)
 			require.NoError(t, err, "reading file: %s", file)
 
 			attempt := func(t require.TestingT) bool {
-				node, err := llblib.ToYAML(ctx, tt.states...)
+				node, err := llblib.ToYAML(r.Context, tt.states...)
 				require.NoError(t, err, "converting state to YAML")
 
 				for _, key := range []string{"local.sharedkeyhint", "local.unique", "secret"} {

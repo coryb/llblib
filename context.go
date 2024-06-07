@@ -7,11 +7,12 @@ import (
 	"github.com/coryb/llblib/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
 )
 
 type (
 	progressKey      struct{}
-	sessionKey       struct{}
+	gatewayClientKey struct{}
 	imageResolverKey struct{}
 	sessionIDKey     struct{}
 	envKey           string
@@ -65,21 +66,16 @@ func sessionID(ctx context.Context) string {
 	return t
 }
 
-// WithSession returns a context with the provided session stored.
-func WithSession(ctx context.Context, s Session) context.Context {
-	if sess, ok := s.(*session); ok {
-		ctx = WithImageResolver(ctx, sess.resolver)
-	}
-	return context.WithValue(ctx, sessionKey{}, s)
+func withGatewayClient(ctx context.Context, c gateway.Client) context.Context {
+	return context.WithValue(ctx, gatewayClientKey{}, c)
 }
 
-// LoadSession returns a session stored on the context, or nil.
-func LoadSession(ctx context.Context) Session {
-	s, ok := ctx.Value(sessionKey{}).(Session)
+func gatewayClient(ctx context.Context) gateway.Client {
+	c, ok := ctx.Value(gatewayClientKey{}).(gateway.Client)
 	if !ok {
 		return nil
 	}
-	return s
+	return c
 }
 
 // WithImageResolver returns a context with the provided llb.ImageMetaResovler
