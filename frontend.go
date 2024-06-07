@@ -154,8 +154,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 						if err := json.Unmarshal(config, &img); err != nil {
 							return nil, errtrace.Errorf("failed to parse config from frontend request: %w", err)
 						}
-						img.ContainerConfig.Cmd = img.DockerOCIImage.Config.Cmd
-						img.ContainerConfig.Labels = img.DockerOCIImage.Config.Labels
+						img.ContainerConfig = imageConfigToContainerConfig(img)
 
 						result = withImageConfig(result, &img)
 						if img.Config.User != "" {

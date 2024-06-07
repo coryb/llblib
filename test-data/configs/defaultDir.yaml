@@ -8,9 +8,6 @@ config:
 container_config:
     Cmd:
         - /bin/sh
-        - -c
-        - '#(nop) '
-        - CMD ["/bin/sh"]
     Labels: {}
 created: "0001-01-01T00:00:00Z"
 history:

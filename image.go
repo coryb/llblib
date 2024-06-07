@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 
 	"braces.dev/errtrace"
 	"github.com/brunoga/deep"
@@ -45,6 +46,37 @@ type ImageConfig struct {
 	mdispec.DockerOCIImage
 	ContainerConfig ContainerConfig `json:"container_config,omitempty"`
 	History         []History       `json:"history,omitempty"`
+}
+
+func imageConfigToContainerConfig(img ImageConfig) ContainerConfig {
+	cmd := img.ContainerConfig.Cmd
+	if cmd == nil {
+		cmd = img.Config.Cmd
+	}
+	// for consistent formatting depending on the source of the image
+	// we might see odd mis-parsed container_config.cmd values like:
+	// [`/bin/sh`, `-c`, `#(nop) `, `CMD ["/bin/sh"]`]
+	// so we will normalize this to the parsed `CMD` values (["/bin/sh"]
+	// in this example).
+	if len(cmd) > 3 && cmd[2] == `#(nop) ` {
+		jsonCmd := strings.TrimPrefix(cmd[3], "CMD ")
+		parsedCmd := []string{}
+		// if we fail to parse the json, we will just use the original
+		if err := json.Unmarshal([]byte(jsonCmd), &parsedCmd); err == nil {
+			cmd = parsedCmd
+		}
+	}
+	labels := img.ContainerConfig.Labels
+	if labels == nil {
+		labels = img.Config.Labels
+	}
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	return ContainerConfig{
+		Cmd:    cmd,
+		Labels: labels,
+	}
 }
 
 // imageConfig will attempt to build the image config from values stored on the
@@ -158,6 +190,7 @@ func Image(ref string, opts ...llb.ImageOption) llb.State {
 			if err := json.Unmarshal(capturingMetaResolver.config, &config); err != nil {
 				return llb.State{}, errtrace.Errorf("failed to unmarshal image config: %w", err)
 			}
+			config.ContainerConfig = imageConfigToContainerConfig(config)
 			return withImageConfig(st, &config), nil
 		}), nil
 	})
