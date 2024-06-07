@@ -145,12 +145,9 @@ func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (l
 	}
 	imageConfig := ImageConfig{
 		DockerOCIImage: *img,
-		ContainerConfig: ContainerConfig{
-			Cmd:    img.Config.Cmd,
-			Labels: img.Config.Labels,
-		},
-		History: history,
+		History:        history,
 	}
+	imageConfig.ContainerConfig = imageConfigToContainerConfig(imageConfig)
 	return withImageConfig(*state, &imageConfig), nil
 }
 
