@@ -72,8 +72,23 @@ func (s *session) ToYAML(ctx context.Context, reqs ...Request) (*yaml.Node, erro
 	return errtrace.Wrap2(ToYAML(ctx, states...))
 }
 
+func anyValue[K comparable, V any](m map[K]V) V {
+	var zero V
+	for _, v := range m {
+		return v
+	}
+	return zero
+}
+
 func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, error) {
-	sess := s.allSessions[req.download]
+	// default to a random session, but if there is a download attachable
+	// for this request we need to use that specific session (only one download
+	// attachable per session is supported by buildkit)
+	sess := anyValue(s.allSessions)
+
+	if req.download != nil {
+		sess = s.allSessions[req.download]
+	}
 
 	attachables := slices.Clone(s.attachables)
 	if req.download != nil {

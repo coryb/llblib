@@ -451,7 +451,12 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	// some discussion for buildkit to have a session manager available to the
 	// client to manage this eventually.
 	allSessions := map[bksess.Attachable]*bksess.Session{}
-	for _, attach := range append([]bksess.Attachable{nil}, s.downloads...) {
+	sessionPerDownload := s.downloads
+	if len(sessionPerDownload) == 0 {
+		// we need at least one session
+		sessionPerDownload = []bksess.Attachable{nil}
+	}
+	for _, attach := range sessionPerDownload {
 		bkSess, err := bksess.NewSession(ctx, "llblib", "")
 		if err != nil {
 			return nil, errtrace.Errorf("failed to create buildkit session: %w", err)
@@ -488,7 +493,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		}
 	}
 
-	resolver := newResolver(cln, s.resolverCache, allSessions[nil], p)
+	resolver := newResolver(cln, s.resolverCache, anyValue(allSessions), p)
 
 	localDirs := maps.Clone(s.localDirs)
 	return &session{
