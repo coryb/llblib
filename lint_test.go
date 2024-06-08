@@ -14,6 +14,16 @@ import (
 
 const GolangCILintVersion = "v1.58.1"
 
+func goSource(s llblib.Solver) llb.State {
+	return s.Local(".", llb.IncludePatterns([]string{
+		"**/*.go",
+		"examples/fail/differ.sh", // <- for go:embed
+		"go.mod",
+		"go.sum",
+		".golangci.yaml",
+	}))
+}
+
 func TestLint(t *testing.T) {
 	t.Parallel()
 	// 5m timeout b/c github actions can be slow to pull the golangci image
@@ -27,14 +37,6 @@ func TestLint(t *testing.T) {
 		Architecture: runtime.GOARCH,
 	}
 
-	sources := r.Solver.Local(".", llb.IncludePatterns([]string{
-		"**/*.go",
-		"examples/fail/differ.sh", // <- for go:embed
-		"go.mod",
-		"go.sum",
-		".golangci.yaml",
-	}))
-
 	st := llblib.ResolvedImage(
 		"golangci/golangci-lint:"+GolangCILintVersion,
 		llb.Platform(currentPlatform),
@@ -43,7 +45,7 @@ func TestLint(t *testing.T) {
 		// ensure go mod cache location is in our persistent cache dir
 		llb.AddEnv("GOMODCACHE", "/root/.cache/go-mod"),
 		llb.Dir(cwd),
-		llb.AddMount(cwd, sources),
+		llb.AddMount(cwd, goSource(r.Solver)),
 		llb.AddMount(
 			"/root/.cache",
 			llb.Scratch(),
