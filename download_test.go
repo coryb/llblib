@@ -16,38 +16,37 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func TestParallelDownloads(t *testing.T) {
-	t.Parallel()
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-
+func buildExample(r testRunner, opts ...llb.RunOption) llb.State {
 	currentPlatform := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
 	}
 
+	return llblib.Image("golang:1.21", llb.Platform(currentPlatform)).Run(
+		llb.Args([]string{"go", "build", "-o", "build/", "./examples/build"}),
+		llb.Dir(r.WorkDir),
+		llb.AddMount(r.WorkDir, goSource(r.Solver)),
+		llb.AddMount(path.Join(r.WorkDir, "build"), llb.Scratch()),
+		llblib.AddCacheMounts(
+			[]string{"/go/pkg/mod", "/root/.cache/go-build"},
+			"gocache",
+			llb.CacheMountShared,
+		),
+		llblib.RunOptions(opts),
+	).GetMount(path.Join(r.WorkDir, "build"))
+}
+
+func TestParallelDownloads(t *testing.T) {
+	t.Parallel()
+
 	tdir := t.TempDir()
 
 	r := newTestRunner(t, withTimeout(10*time.Minute))
 
-	build := func(opts ...llb.RunOption) llb.State {
-		return llblib.Image("golang:1.21", llb.Platform(currentPlatform)).Run(
-			llb.Args([]string{"go", "build", "-o", "build/", "./examples/build"}),
-			llb.Dir(cwd),
-			llb.AddMount(cwd, goSource(r.Solver)),
-			llb.AddMount(path.Join(cwd, "build"), llb.Scratch()),
-			llblib.AddCacheMounts(
-				[]string{"/go/pkg/mod", "/root/.cache/go-build"},
-				"gocache",
-				llb.CacheMountShared,
-			),
-			llblib.RunOptions(opts),
-		).GetMount(path.Join(cwd, "build"))
-	}
 	var eg errgroup.Group
 	eg.Go(func() error {
 		_, err := r.Run(t, r.Solver.Build(
-			build(llb.AddEnv("GOARCH", "amd64")),
+			buildExample(r, llb.AddEnv("GOARCH", "amd64")),
 			llblib.Download(filepath.Join(tdir, "build", "amd64")),
 			llblib.WithLabel("linux/amd64"),
 		))
@@ -55,13 +54,13 @@ func TestParallelDownloads(t *testing.T) {
 	})
 	eg.Go(func() error {
 		_, err := r.Run(t, r.Solver.Build(
-			build(llb.AddEnv("GOARCH", "arm64")),
+			buildExample(r, llb.AddEnv("GOARCH", "arm64")),
 			llblib.Download(filepath.Join(tdir, "build", "arm64")),
 			llblib.WithLabel("linux/arm64"),
 		))
 		return err
 	})
-	err = eg.Wait()
+	err := eg.Wait()
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(tdir, "build", "amd64", "build"))
 	require.NoError(t, err)

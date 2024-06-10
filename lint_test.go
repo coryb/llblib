@@ -1,7 +1,6 @@
 package llblib_test
 
 import (
-	"os"
 	"runtime"
 	"testing"
 	"time"
@@ -29,9 +28,6 @@ func TestLint(t *testing.T) {
 	// 5m timeout b/c github actions can be slow to pull the golangci image
 	r := newTestRunner(t, withTimeout(300*time.Second))
 
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-
 	currentPlatform := ocispec.Platform{
 		OS:           "linux",
 		Architecture: runtime.GOARCH,
@@ -44,8 +40,8 @@ func TestLint(t *testing.T) {
 		llb.Args([]string{"golangci-lint", "run", "--timeout", "9m"}),
 		// ensure go mod cache location is in our persistent cache dir
 		llb.AddEnv("GOMODCACHE", "/root/.cache/go-mod"),
-		llb.Dir(cwd),
-		llb.AddMount(cwd, goSource(r.Solver)),
+		llb.Dir(r.WorkDir),
+		llb.AddMount(r.WorkDir, goSource(r.Solver)),
 		llb.AddMount(
 			"/root/.cache",
 			llb.Scratch(),
@@ -56,6 +52,6 @@ func TestLint(t *testing.T) {
 		),
 	).Root()
 
-	_, err = r.Run(t, r.Solver.Build(st))
+	_, err := r.Run(t, r.Solver.Build(st))
 	require.NoError(t, err)
 }

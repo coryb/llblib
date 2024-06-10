@@ -16,6 +16,10 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+const (
+	imageConfigDescriptionKey = "llblib.imageconfig"
+)
+
 type imageConfigKey struct{}
 
 type imageConfigState struct {
@@ -101,12 +105,28 @@ func loadImageConfigState(ctx context.Context, st llb.State) (imageConfigState, 
 	if err != nil {
 		return imageConfigState{}, errtrace.Wrap(err)
 	}
-	if v == nil {
+	if cs, ok := v.(imageConfigState); ok {
+		return cs, nil
+	} else if v != nil {
+		return imageConfigState{}, errtrace.Errorf("unexpected type %T for image config", v)
+	}
+
+	// if we don't have an image config stored on the state, then it might be
+	// stored in the metadata description which is only accessible by
+	// marshalling the state.
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		return imageConfigState{}, errtrace.Wrap(err)
+	}
+	imageConfig, ok := def.Constraints.Metadata.Description[imageConfigDescriptionKey]
+	if !ok {
 		return imageConfigState{}, nil
 	}
-	cs, ok := v.(imageConfigState)
-	if !ok {
-		return imageConfigState{}, errtrace.Errorf("unexpected type %T for image config", v)
+	cs := imageConfigState{
+		config: &ImageConfig{},
+	}
+	if err := json.Unmarshal([]byte(imageConfig), cs.config); err != nil {
+		return imageConfigState{}, errtrace.Errorf("failed to unmarshal image config: %w", err)
 	}
 	return cs, nil
 }

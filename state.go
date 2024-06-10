@@ -1,6 +1,7 @@
 package llblib
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"braces.dev/errtrace"
 	"github.com/kballard/go-shellquote"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/llbbuild"
+	"github.com/moby/buildkit/solver/pb"
 	mdispec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -23,6 +26,44 @@ func Digest(st llb.State) (digest.Digest, error) {
 	c := &llb.Constraints{}
 	dgst, _, _, _, err := st.Output().Vertex(ctx, c).Marshal(ctx, c)
 	return dgst, errtrace.Wrap(err)
+}
+
+// MarshalWithImageConfig marshals the state to a definition ensuring the
+// image config state is preserved in the definition.
+func MarshalWithImageConfig(ctx context.Context, st llb.State) (*llb.Definition, error) {
+	config, err := imageConfig(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	rawConfig, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return st.Marshal(ctx, llb.WithDescription(map[string]string{
+		imageConfigDescriptionKey: string(rawConfig),
+	}))
+}
+
+// BuildDefinition builds a definition and returns a state.
+func BuildDefinition(def *llb.Definition) llb.State {
+	buf := bytes.Buffer{}
+	llb.WriteTo(def, &buf)
+
+	st := llb.Scratch().File(
+		llb.Mkfile(pb.LLBDefinitionInput, 0o644, buf.Bytes()),
+	).With(llbbuild.Build())
+
+	if def.Constraints != nil {
+		if config, ok := def.Constraints.Metadata.Description[imageConfigDescriptionKey]; ok {
+			imageConfig := &ImageConfig{}
+			if err := json.Unmarshal([]byte(config), imageConfig); err != nil {
+				panic(err)
+			}
+			return withImageConfig(st, imageConfig)
+		}
+	}
+	return st
 }
 
 type layerHistory struct {

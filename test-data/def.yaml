@@ -1,0 +1,62 @@
+- type: BUILD
+  inputs:
+    buildkit.llb.definition:
+        type: FILE
+        actions:
+            - type: MKFILE
+              path: /buildkit.llb.definition
+              mode: "0o644"
+              data: !!binary |
+                CkUaMQovZG9ja2VyLWltYWdlOi8vZG9ja2VyLmlvL2xpYnJhcnkvYnVzeWJveDpsYXRlc3
+                RSDgoFYW1kNjQSBWxpbnV4WgAKggIKSQpHc2hhMjU2OjA4YTAzZjNmZmU1ZmJhNDIxYTY0
+                MDNjMzFlMTUzNDI1Y2VkNjMxZDEwODg2OGYzMGUwNDk4NWY5OWQ2OTMyNmUSogEKOAoDY2
+                F0Cg4vdG1wL3VuaXguc29jaxIcU1NIX0FVVEhfU09DSz0vdG1wL3VuaXguc29jaxoBL1gB
+                EgMaAS8SYRoOL3RtcC91bml4LnNvY2swArIBTApHc2hhMjU2OjFiZTJlNGJiZDk1YWU5OT
+                IzZWNiYzkzOGMyNzI1OGRkMzQyNzA5ODhhODkyZjcyMTgxMTI4M2I1NDEwMTZiMmIggANS
+                DgoFYW1kNjQSBWxpbnV4WgAKSwpJCkdzaGEyNTY6Y2EzZDc4ZjI1YzRmNGVjM2I4MzYzZj
+                M1M2UzZDg0NTU3M2ZlYzBmMjg0ZGQ1YWMzYjYzZDI1YmE0Njc5NWRhNRLWAwpHc2hhMjU2
+                OjA4YTAzZjNmZmU1ZmJhNDIxYTY0MDNjMzFlMTUzNDI1Y2VkNjMxZDEwODg2OGYzMGUwND
+                k4NWY5OWQ2OTMyNmUSigMS9QIKEmxsYmxpYi5pbWFnZWNvbmZpZxLeAnsiY3JlYXRlZCI6
+                IjIwMjMtMDUtMThUMjI6MzQ6MTdaIiwiYXJjaGl0ZWN0dXJlIjoiYW1kNjQiLCJvcyI6Im
+                xpbnV4Iiwicm9vdGZzIjp7InR5cGUiOiJsYXllcnMiLCJkaWZmX2lkcyI6WyJzaGEyNTY6
+                ZDUxYWY5NmNmOTNlMjI1ODI1ZWZkNDg0ZWE0NTdmODY3Y2IyYjk2N2Y3NDE1YjlhM2I3ZT
+                Y1YTJmODAzODM4YSJdfSwiY29uZmlnIjp7IkNtZCI6WyJzaCJdfSwiY29udGFpbmVyX2Nv
+                bmZpZyI6eyJDbWQiOlsic2giXSwiTGFiZWxzIjp7fX0sImhpc3RvcnkiOlt7ImNyZWF0ZW
+                QiOiIyMDIzLTA1LTE4VDIyOjM0OjE3WiIsImNyZWF0ZWRfYnkiOiJCdXN5Qm94IDEuMzYu
+                MSAoZ2xpYmMpLCBEZWJpYW4gMTIifV19KhAKDHNvdXJjZS5pbWFnZRABEoEECkdzaGEyNT
+                Y6Y2EzZDc4ZjI1YzRmNGVjM2I4MzYzZjM1M2UzZDg0NTU3M2ZlYzBmMjg0ZGQ1YWMzYjYz
+                ZDI1YmE0Njc5NWRhNRK1AxL1AgoSbGxibGliLmltYWdlY29uZmlnEt4CeyJjcmVhdGVkIj
+                oiMjAyMy0wNS0xOFQyMjozNDoxN1oiLCJhcmNoaXRlY3R1cmUiOiJhbWQ2NCIsIm9zIjoi
+                bGludXgiLCJyb290ZnMiOnsidHlwZSI6ImxheWVycyIsImRpZmZfaWRzIjpbInNoYTI1Nj
+                pkNTFhZjk2Y2Y5M2UyMjU4MjVlZmQ0ODRlYTQ1N2Y4NjdjYjJiOTY3Zjc0MTViOWEzYjdl
+                NjVhMmY4MDM4MzhhIl19LCJjb25maWciOnsiQ21kIjpbInNoIl19LCJjb250YWluZXJfY2
+                9uZmlnIjp7IkNtZCI6WyJzaCJdLCJMYWJlbHMiOnt9fSwiaGlzdG9yeSI6W3siY3JlYXRl
+                ZCI6IjIwMjMtMDUtMThUMjI6MzQ6MTdaIiwiY3JlYXRlZF9ieSI6IkJ1c3lCb3ggMS4zNi
+                4xIChnbGliYyksIERlYmlhbiAxMiJ9XX0qEgoOZXhlYy5tZXRhLmJhc2UQASoTCg9leGVj
+                Lm1vdW50LmJpbmQQASoSCg5leGVjLm1vdW50LnNzaBABEoABCkdzaGEyNTY6ZDlmNjg3NT
+                RhZGM1ZjE4NzljNmY4NWFhZmEzYTQ0NzZlODYxODYxODNhNTFjOTBmMzQ0OWJiNTJiZDBm
+                NTU5ZBI1Kg8KC2NvbnN0cmFpbnRzEAEqFAoQbWV0YS5kZXNjcmlwdGlvbhABKgwKCHBsYX
+                Rmb3JtEAEamgEKSwpHc2hhMjU2OjA4YTAzZjNmZmU1ZmJhNDIxYTY0MDNjMzFlMTUzNDI1
+                Y2VkNjMxZDEwODg2OGYzMGUwNDk4NWY5OWQ2OTMyNmUSAApLCkdzaGEyNTY6Y2EzZDc4Zj
+                I1YzRmNGVjM2I4MzYzZjM1M2UzZDg0NTU3M2ZlYzBmMjg0ZGQ1YWMzYjYzZDI1YmE0Njc5
+                NWRhNRIA
+              input:
+                type: SOURCE
+                source: scratch
+  build:
+    type: EXEC
+    args: [cat, /tmp/unix.sock]
+    env: [SSH_AUTH_SOCK=/tmp/unix.sock]
+    cwd: /
+    mounts:
+        - mountpoint: /
+          type: BIND
+          output: 0
+          input:
+            type: SOURCE
+            source: docker-image://docker.io/library/busybox:latest
+            platform: linux/amd64
+        - mountpoint: /tmp/unix.sock
+          type: SSH
+          ssh: sha256:1be2e4bbd95ae9923ecbc938c27258dd34270988a892f721811283b541016b2b
+          mode: "0o600"

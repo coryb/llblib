@@ -1,6 +1,7 @@
 package llblib_test
 
 import (
+	"context"
 	"net"
 	"os"
 	"path/filepath"
@@ -19,6 +20,14 @@ import (
 func TestYAML(t *testing.T) {
 	t.Parallel()
 	r := newTestRunner(t, withTimeout(60*time.Second))
+
+	def, err := llblib.MarshalWithImageConfig(context.Background(),
+		llblib.Image("busybox", llb.LinuxAmd64).Run(
+			llb.Args([]string{"cat", "/tmp/unix.sock"}),
+			r.Solver.Forward("unix://./unix.sock", "/tmp/unix.sock"),
+		).Root(),
+	)
+	require.NoError(t, err)
 
 	states := func(s ...llb.State) []llb.State {
 		return s
@@ -206,6 +215,11 @@ func TestYAML(t *testing.T) {
 			),
 		),
 		expected: "file",
+	}, {
+		states: states(
+			llblib.BuildDefinition(def),
+		),
+		expected: "def",
 	}} {
 		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {

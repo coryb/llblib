@@ -10,6 +10,7 @@ require (
 	github.com/distribution/reference v0.5.0
 	github.com/docker/cli v25.0.3+incompatible
 	github.com/docker/docker v25.0.3+incompatible // master (v25.0.0-dev)
+	github.com/docker/go-connections v0.5.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/moby/buildkit v0.13.2
 	github.com/moby/docker-image-spec v1.3.1
@@ -27,8 +28,6 @@ require (
 	google.golang.org/grpc v1.59.0
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-require github.com/docker/go-connections v0.5.0
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
