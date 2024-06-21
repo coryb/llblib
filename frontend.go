@@ -156,7 +156,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 						}
 						img.ContainerConfig = imageConfigToContainerConfig(img)
 
-						result = withImageConfig(result, &img)
+						result = WithImageConfig(result, &img)
 						if img.Config.User != "" {
 							result = result.User(img.Config.User)
 						}

@@ -148,7 +148,7 @@ func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (l
 		History:        history,
 	}
 	imageConfig.ContainerConfig = imageConfigToContainerConfig(imageConfig)
-	return withImageConfig(*state, &imageConfig), nil
+	return WithImageConfig(*state, &imageConfig), nil
 }
 
 const (

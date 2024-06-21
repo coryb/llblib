@@ -60,7 +60,7 @@ func BuildDefinition(def *llb.Definition) llb.State {
 			if err := json.Unmarshal([]byte(config), imageConfig); err != nil {
 				panic(err)
 			}
-			return withImageConfig(st, imageConfig)
+			return WithImageConfig(st, imageConfig)
 		}
 	}
 	return st

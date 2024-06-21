@@ -131,8 +131,8 @@ func loadImageConfigState(ctx context.Context, st llb.State) (imageConfigState, 
 	return cs, nil
 }
 
-// withImageConfig will store the image config on the llb.State.
-func withImageConfig(st llb.State, config *ImageConfig) llb.State {
+// WithImageConfig will store the image config on the llb.State.
+func WithImageConfig(st llb.State, config *ImageConfig) llb.State {
 	return st.WithValue(imageConfigKey{}, imageConfigState{config: config})
 }
 
@@ -211,7 +211,7 @@ func Image(ref string, opts ...llb.ImageOption) llb.State {
 				return llb.State{}, errtrace.Errorf("failed to unmarshal image config: %w", err)
 			}
 			config.ContainerConfig = imageConfigToContainerConfig(config)
-			return withImageConfig(st, &config), nil
+			return WithImageConfig(st, &config), nil
 		}), nil
 	})
 }
