@@ -108,17 +108,21 @@ type graphState struct {
 func (g graphState) newGraph(def *pb.Definition) (*pb.Input, graphState, error) {
 	ops := maps.Clone(g.ops)
 	var dgst digest.Digest
-	for _, dt := range def.Def {
-		var pbOp pb.Op
-		if err := (&pbOp).Unmarshal(dt); err != nil {
-			return nil, graphState{}, errtrace.Wrap(err)
+	if def != nil {
+		for _, dt := range def.Def {
+			var pbOp pb.Op
+			if err := (&pbOp).Unmarshal(dt); err != nil {
+				return nil, graphState{}, errtrace.Wrap(err)
+			}
+			dgst = digest.FromBytes(dt)
+			ops[dgst] = &pbOp
 		}
-		dgst = digest.FromBytes(dt)
-		ops[dgst] = &pbOp
 	}
 	meta := maps.Clone(g.meta)
-	for d, m := range def.Metadata {
-		meta[d] = m
+	if def != nil {
+		for d, m := range def.Metadata {
+			meta[d] = m
+		}
 	}
 
 	if dgst == "" {
@@ -601,32 +605,44 @@ func (g graphState) yamlBuildOp(op *pb.Op, b *pb.BuildOp) (*yaml.Node, error) {
 	node := walky.NewMappingNode()
 	yamlAddKV(node, "type", "BUILD")
 	yamlAddMap(node, "attrs", b.Attrs)
-	if b.Builder == -1 {
-		yamlMapAdd(node, walky.NewStringNode("source"), g.scratchNode())
-	} else {
-		source, err := g.visit(op.Inputs[b.Builder])
-		if err != nil {
-			return nil, errtrace.Errorf("visiting buildOp source: %w", err)
-		}
-		yamlMapAdd(node, walky.NewStringNode("source"), source)
-	}
+
 	inputs := walky.NewMappingNode()
 	yamlMapAdd(node, walky.NewStringNode("inputs"), inputs)
-	inputNames := maps.Keys(b.Inputs)
-	sort.Strings(inputNames)
-	for _, name := range inputNames {
-		if b.Inputs[name].Input == -1 {
-			yamlMapAdd(inputs, walky.NewStringNode(name), g.scratchNode())
-		} else {
-			input, err := g.visit(op.Inputs[b.Inputs[name].Input])
-			if err != nil {
-				return nil, errtrace.Errorf("visiting buildOp input %q: %w", name, err)
-			}
-			yamlMapAdd(inputs, walky.NewStringNode(name), input)
-		}
+
+	// builds have exactly one input named `buildkit.llb.definition`
+	defInput, ok := b.Inputs[pb.LLBDefinitionInput]
+	if !ok {
+		return nil, errtrace.New("buildOp missing " + pb.LLBDefinitionInput + " input")
+	}
+	input, err := g.visit(op.Inputs[defInput.Input])
+	if err != nil {
+		return nil, errtrace.Errorf("visiting buildOp input %q: %w", pb.LLBDefinitionInput, err)
+	}
+	yamlMapAdd(inputs, walky.NewStringNode(pb.LLBDefinitionInput), input)
+
+	// extract the MkFile op from the input so we can unmarshal the def
+	// and build the execution graph for the buildOp
+	inputOp := g.ops[op.Inputs[defInput.Input].Digest]
+	file := inputOp.GetFile()
+	if file == nil {
+		return nil, errtrace.New("buildOp input is not a FILE")
+	}
+	if len(file.Actions) == 0 {
+		return nil, errtrace.New("buildOp input has no actions")
+	}
+	action := file.Actions[0]
+	mkfile := action.GetMkfile()
+	if mkfile == nil {
+		return nil, errtrace.New("buildOp input action is not a MKFILE")
+	}
+	defData := mkfile.GetData()
+
+	var def pb.Definition
+	if err := def.Unmarshal(defData); err != nil {
+		return nil, errtrace.Errorf("unmarshalling definition: %w", err)
 	}
 
-	buildInput, buildGraph, err := g.newGraph(b.Def)
+	buildInput, buildGraph, err := g.newGraph(&def)
 	if err != nil {
 		return nil, errtrace.Errorf("building graph for buildOp: %w", err)
 	}

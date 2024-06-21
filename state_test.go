@@ -1,6 +1,7 @@
 package llblib_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -37,6 +38,11 @@ func expectConfig(t *testing.T, cfgData string) {
 
 func TestImageConfigMods(t *testing.T) {
 	t.Parallel()
+	def, err := llblib.MarshalWithImageConfig(
+		context.Background(),
+		llblib.Image(alpine, llb.LinuxAmd64),
+	)
+	require.NoError(t, err)
 	for _, tt := range []struct {
 		name string
 		base llb.State
@@ -64,6 +70,9 @@ func TestImageConfigMods(t *testing.T) {
 				),
 			)),
 		),
+	}, {
+		name: "def",
+		base: llblib.BuildDefinition(def),
 	}} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {

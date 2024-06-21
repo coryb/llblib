@@ -33,6 +33,7 @@ type testRunner struct {
 	isMoby   bool
 	Solver   llblib.Solver
 	Progress progress.Progress
+	WorkDir  string
 }
 
 func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
@@ -47,6 +48,11 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ro.timeout)
 	t.Cleanup(cancel)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %s", err)
+	}
 
 	cln, isMoby, err := llblib.NewClient(ctx, os.Getenv("BUILDKIT_HOST"))
 	if err != nil {
@@ -69,6 +75,7 @@ func newTestRunner(t *testing.T, opts ...runnerOption) testRunner {
 		isMoby:   isMoby,
 		Solver:   llblib.NewSolver(),
 		Progress: prog,
+		WorkDir:  cwd,
 	}
 }
 
