@@ -108,6 +108,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 	ctx = WithSession(ctx, s)
 	ctx = withSessionID(ctx, sess.ID())
 
+	var imageconfig []byte
 	if req.buildFunc != nil {
 		res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			res, err := req.buildFunc(ctx, c)
@@ -118,10 +119,25 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 				}
 				return nil, errors.Join(err, errtrace.Wrap(moreErr))
 			}
+			if spec, err := imageConfig(ctx, req.state); err != nil {
+				return nil, errtrace.Wrap(err)
+			} else if spec != nil {
+				imageconfig, err = json.Marshal(spec)
+				if err != nil {
+					return nil, errtrace.Wrap(err)
+				}
+				res.AddMeta(exptypes.ExporterImageConfigKey, imageconfig)
+			}
 			return res, errtrace.Wrap(err)
 		}, prog.Channel())
 		if err != nil {
 			return nil, errtrace.Errorf("build failed: %w", err)
+		}
+		if len(imageconfig) > 0 {
+			if res.ExporterResponse == nil {
+				res.ExporterResponse = map[string]string{}
+			}
+			res.ExporterResponse[ExporterImageConfigKey] = string(imageconfig)
 		}
 		return res, nil
 	}
@@ -145,7 +161,6 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		}
 	}
 
-	var imageconfig []byte
 	res, err := s.client.Build(ctx, solveOpt, "llblib", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 		gwReq := gateway.SolveRequest{
 			Evaluate:   req.evaluate,
