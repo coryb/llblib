@@ -83,9 +83,9 @@ func imageConfigToContainerConfig(img ImageConfig) ContainerConfig {
 	}
 }
 
-// imageConfig will attempt to build the image config from values stored on the
+// LoadImageConfig will attempt to build the image config from values stored on the
 // llb.State.
-func imageConfig(ctx context.Context, st llb.State) (*ImageConfig, error) {
+func LoadImageConfig(ctx context.Context, st llb.State) (*ImageConfig, error) {
 	cs, err := loadImageConfigState(ctx, st)
 	if err != nil {
 		return nil, errtrace.Wrap(err)

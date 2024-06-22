@@ -31,7 +31,7 @@ func Digest(st llb.State) (digest.Digest, error) {
 // MarshalWithImageConfig marshals the state to a definition ensuring the
 // image config state is preserved in the definition.
 func MarshalWithImageConfig(ctx context.Context, st llb.State) (*llb.Definition, error) {
-	config, err := imageConfig(ctx, st)
+	config, err := LoadImageConfig(ctx, st)
 	if err != nil {
 		return nil, err
 	}
