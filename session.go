@@ -162,7 +162,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			}
 			return nil, errtrace.Wrap(err)
 		}
-		if spec, err := imageConfig(ctx, req.state); err != nil {
+		if spec, err := LoadImageConfig(ctx, req.state); err != nil {
 			return nil, errtrace.Wrap(err)
 		} else if spec != nil {
 			imageconfig, err = json.Marshal(spec)

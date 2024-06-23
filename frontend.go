@@ -6,8 +6,10 @@ import (
 
 	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	"golang.org/x/exp/maps"
 )
 
 // FrontendOption can be used to modify a Frontend request.
@@ -106,11 +108,32 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 			opts:   fo.ConstraintsOpts,
 		}
 
+		opts := maps.Clone(fo.Opts)
 		var result llb.State
 		req := Request{
 			buildFunc: func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 				inputs := map[string]*pb.Definition{}
 				for name, input := range fo.Inputs {
+					// Frontends can have `input-metadata:name` options to
+					// provide image metadata like the caps available/allowed,
+					// as well as entrypoint to exec to the frontend binary.
+					cfg, err := LoadImageConfig(ctx, input)
+					if err != nil {
+						return nil, errtrace.Wrap(err)
+					}
+					if cfg != nil {
+						encodedConfig, err := json.Marshal(cfg)
+						if err != nil {
+							return nil, errtrace.Wrap(err)
+						}
+						metadata, err := json.Marshal(map[string]any{
+							exptypes.ExporterImageConfigKey: encodedConfig,
+						})
+						if err != nil {
+							return nil, errtrace.Wrap(err)
+						}
+						opts["input-metadata:"+name] = string(metadata)
+					}
 					def, err := input.Marshal(ctx, constrainOpt)
 					if err != nil {
 						return nil, errtrace.Wrap(err)
@@ -124,7 +147,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 				}
 				req := gateway.SolveRequest{
 					Frontend:       frontend,
-					FrontendOpt:    fo.Opts,
+					FrontendOpt:    opts,
 					FrontendInputs: inputs,
 				}
 				res, err := c.Solve(ctx, req)
@@ -143,7 +166,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 					if err != nil {
 						return nil, errtrace.Errorf("failed to convert ref to state: %w", err)
 					}
-					if config, ok := res.Metadata["containerimage.config"]; ok {
+					if config, ok := res.Metadata[exptypes.ExporterImageConfigKey]; ok {
 						result, err = result.WithImageConfig(config)
 						if err != nil {
 							return nil, errtrace.Errorf("failed to apply image config from frontend request: %w", err)
