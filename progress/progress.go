@@ -55,8 +55,30 @@ func WithOutput(w io.Writer) Option {
 	})
 }
 
+// DisplayMode is used to set the display mode for the progress.
+type DisplayMode = progressui.DisplayMode
+
+const (
+	// DefaultMode is the default value for the DisplayMode.
+	// This is effectively the same as AutoMode.
+	DefaultMode = progressui.DefaultMode
+	// AutoMode will choose TtyMode or PlainMode depending on if the output is
+	// a tty.
+	AutoMode DisplayMode = progressui.AutoMode
+	// QuietMode discards all output.
+	QuietMode DisplayMode = progressui.QuietMode
+	// TtyMode enforces the output is a tty and will otherwise cause an error if it isn't.
+	TtyMode DisplayMode = progressui.TtyMode
+	// PlainMode is the human-readable plain text output. This mode is not meant to be read
+	// by machines.
+	PlainMode DisplayMode = progressui.PlainMode
+	// RawJSONMode is the raw JSON text output. It will marshal the various solve status events
+	// to JSON to be read by an external program.
+	RawJSONMode DisplayMode = progressui.RawJSONMode
+)
+
 // WithMode is used to set the display mode for the progress.
-func WithMode(m progressui.DisplayMode) Option {
+func WithMode(m DisplayMode) Option {
 	return progressOptionFunc(func(p *progress) {
 		p.mode = m
 	})
@@ -119,7 +141,7 @@ type seenKey struct {
 type progress struct {
 	statusCh chan *client.SolveStatus
 	writer   io.Writer
-	mode     progressui.DisplayMode
+	mode     DisplayMode
 
 	children  int
 	childCond sync.Cond
