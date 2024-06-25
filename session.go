@@ -162,6 +162,11 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 			}
 			return nil, errtrace.Wrap(err)
 		}
+		for _, h := range req.handlers {
+			if err := h(ctx, c, res); err != nil {
+				return nil, errtrace.Errorf("result handler failed: %w", err)
+			}
+		}
 		if spec, err := LoadImageConfig(ctx, req.state); err != nil {
 			return nil, errtrace.Wrap(err)
 		} else if spec != nil {

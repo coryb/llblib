@@ -112,6 +112,7 @@ type Request struct {
 	buildFunc    func(context.Context, gateway.Client) (*gateway.Result, error)
 	onError      func(context.Context, gateway.Client, error) (dropErr bool, err error)
 	entitlements []entitlements.Entitlement
+	handlers     []func(context.Context, gateway.Client, *gateway.Result) error
 }
 
 type solver struct {
@@ -345,6 +346,14 @@ func Download(localDir string) RequestOption {
 			// TODO allow for multiple exports
 			filesync.WithFSSyncDir(0, localDir),
 		)
+	})
+}
+
+// WithResultHandler will add a handler to the request that will be called so
+// that data can be extracted from the gateway result.
+func WithResultHandler(h func(context.Context, gateway.Client, *gateway.Result) error) RequestOption {
+	return requestOptionFunc(func(r *Request) {
+		r.handlers = append(r.handlers, h)
 	})
 }
 

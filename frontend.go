@@ -185,7 +185,7 @@ func Frontend(source string, opts ...FrontendOption) llb.State {
 						}
 					}
 				}
-				return nil, nil
+				return gateway.NewResult(), nil
 			},
 		}
 		_, err := sess.Do(ctx, req)
