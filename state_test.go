@@ -217,6 +217,13 @@ func testImageConfigMods(t *testing.T, base llb.State) {
 				llblib.DockerRunShell("/bin/bash -c"),
 			)
 		},
+	}, {
+		name: "platform",
+		state: func(base llb.State) llb.State {
+			return base.With(
+				llblib.Platform(ocispec.Platform{OS: "leenux", Architecture: "amd23"}),
+			)
+		},
 	}} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
