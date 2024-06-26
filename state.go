@@ -334,11 +334,6 @@ func AddLabel(key, value string) llb.StateOption {
 				img.ContainerConfig.Labels = make(map[string]string)
 			}
 
-			if curVal, ok := img.Config.Labels[key]; ok && curVal == value {
-				// No need to add the label if it already exists with the same value
-				return nil
-			}
-
 			img.Config.Labels[key] = value
 			img.ContainerConfig.Labels[key] = value // legacy
 			commitHistoryKV(ctx, img, "LABEL", key, value)
