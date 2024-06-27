@@ -334,11 +334,6 @@ func AddLabel(key, value string) llb.StateOption {
 				img.ContainerConfig.Labels = make(map[string]string)
 			}
 
-			if curVal, ok := img.Config.Labels[key]; ok && curVal == value {
-				// No need to add the label if it already exists with the same value
-				return nil
-			}
-
 			img.Config.Labels[key] = value
 			img.ContainerConfig.Labels[key] = value // legacy
 			commitHistoryKV(ctx, img, "LABEL", key, value)
@@ -460,6 +455,17 @@ func DockerRunShell(shell ...string) llb.StateOption {
 				empty: true,
 				desc:  "SHELL " + string(out),
 			})
+			return nil
+		})
+	}
+}
+
+// Platform assigns the provided platform to the image state and the image config.
+func Platform(p ocispec.Platform) llb.StateOption {
+	return func(st llb.State) llb.State {
+		return withImageConfigMutator(st.Platform(p), func(_ context.Context, img *ImageConfig) error {
+			img.Platform = p
+			img.Created = &time.Time{}
 			return nil
 		})
 	}

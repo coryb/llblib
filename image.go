@@ -90,12 +90,18 @@ func LoadImageConfig(ctx context.Context, st llb.State) (*ImageConfig, error) {
 	if err != nil {
 		return nil, errtrace.Wrap(err)
 	}
+	// copy the config so we don't mutate it multiple times if LoadImageConfig
+	// is called multiple times
+	cfg, err := deep.Copy(cs.config)
+	if err != nil {
+		return nil, errtrace.Errorf("failed to copy image config: %w", err)
+	}
 	if cs.mutator != nil {
-		if err := cs.mutator(ctx, cs.config); err != nil {
+		if err := cs.mutator(ctx, cfg); err != nil {
 			return nil, errtrace.Errorf("failed to apply image config mutator: %w", err)
 		}
 	}
-	return cs.config, nil
+	return cfg, nil
 }
 
 // loadImageConfigState will return the most recent imageConfigState stored
@@ -156,14 +162,6 @@ func withImageConfigMutator(st llb.State, m func(context.Context, *ImageConfig) 
 					},
 				},
 			}
-		} else {
-			// deep copy so modifying does not mutate pointers lower in the
-			// state stack.
-			cp, err := deep.Copy(cs.config)
-			if err != nil {
-				return llb.State{}, errtrace.Errorf("failed to copy image config: %w", err)
-			}
-			cs.config = cp
 		}
 		if cs.mutator == nil {
 			cs.mutator = m
