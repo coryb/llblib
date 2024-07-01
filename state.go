@@ -152,6 +152,15 @@ func Merge(states []llb.State, opts ...llb.ConstraintsOpt) llb.State {
 
 // Diff is similar to llb.Diff but also commits history to the image config.
 func Diff(lower, upper llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	// short-circuit edge cases
+	if lower.Output() == nil {
+		if upper.Output() == nil {
+			// diff of scratch and scratch is scratch
+			return llb.Scratch()
+		}
+		// diff of scratch and upper is just upper
+		return upper
+	}
 	return llb.Diff(lower, upper, opts...).Async(func(ctx context.Context, st llb.State, c *llb.Constraints) (llb.State, error) {
 		lowerDgst, _, _, _, err := lower.Output().Vertex(ctx, c).Marshal(ctx, c)
 		if err != nil {
