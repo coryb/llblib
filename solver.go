@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -264,6 +265,9 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 // interface.
 func firstUpInterface() string {
 	interfaces, _ := net.Interfaces()
+	sort.Slice(interfaces, func(i, j int) bool {
+		return interfaces[i].Index < interfaces[j].Index
+	})
 	for _, iface := range interfaces {
 		if iface.Flags&net.FlagUp == 0 {
 			continue // not up
