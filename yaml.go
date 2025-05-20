@@ -3,6 +3,8 @@ package llblib
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,7 +15,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
-	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -215,7 +216,7 @@ func yamlAddMap(n *yaml.Node, name string, m map[string]string, opts ...yamlOpt)
 		return
 	}
 	attrs := walky.NewMappingNode()
-	keys := maps.Keys(m)
+	keys := slices.Collect(maps.Keys(m))
 	sort.Strings(keys)
 	for _, key := range keys {
 		yamlMapAdd(attrs,
@@ -437,7 +438,7 @@ func (g graphState) yamlMount(op *pb.Op, m *pb.Mount) (*yaml.Node, error) {
 	yamlAddKV(mount, "type", m.MountType)
 	if m.MountType == pb.MountType_BIND && !m.Readonly {
 		// CACHE, SECRET, SSH, TMPFS mounts dont have outputs
-		yamlAddInt(mount, "output", int64(m.Output))
+		yamlAddInt(mount, "output", m.Output)
 	}
 	yamlAddBool(mount, "readonly", m.Readonly)
 	yamlAddKV(mount, "source-path", m.Selector)

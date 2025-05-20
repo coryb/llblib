@@ -221,7 +221,6 @@ func TestYAML(t *testing.T) {
 		),
 		expected: "def",
 	}} {
-		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {
 			t.Parallel()
 			sess := r.Session(t)

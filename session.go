@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
@@ -12,7 +13,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
-	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
 

@@ -23,7 +23,6 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20250410151801-5b74a7ad7583
 	go.uber.org/goleak v1.2.1
 	golang.org/x/crypto v0.37.0
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 	golang.org/x/sync v0.13.0
 	golang.org/x/sys v0.32.0
 	golang.org/x/term v0.31.0
