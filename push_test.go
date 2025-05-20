@@ -11,8 +11,8 @@ import (
 
 	"github.com/coryb/llblib"
 	"github.com/distribution/reference"
-	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/moby/buildkit/client/llb"
@@ -38,7 +38,7 @@ func startRegistry(ctx context.Context, t *testing.T) int {
 		AutoRemove:      true,
 	}
 
-	body, err := dockerClient.ImagePull(ctx, cfg.Image, dockertypes.ImagePullOptions{})
+	body, err := dockerClient.ImagePull(ctx, cfg.Image, image.PullOptions{})
 	require.NoError(t, err)
 	_, err = io.Copy(io.Discard, body)
 	require.NoError(t, err)

@@ -53,7 +53,7 @@ func main() {
 	slv := llblib.NewSolver(llblib.WithCwd(localCwd))
 
 	root := llblib.ResolvedImage(
-		"golang:1.20",
+		"golang:1.24",
 		llb.Platform(platform),
 	).Dir("/")
 

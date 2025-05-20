@@ -95,12 +95,17 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		attachables = append(attachables, req.download)
 	}
 
+	entitlements := make([]string, len(req.entitlements))
+	for i, e := range req.entitlements {
+		entitlements[i] = e.String()
+	}
+
 	solveOpt := client.SolveOpt{
 		SharedSession:         sess,
 		SessionPreInitialized: true,
 		LocalDirs:             s.localDirs,
 		Session:               attachables,
-		AllowedEntitlements:   req.entitlements,
+		AllowedEntitlements:   entitlements,
 	}
 
 	prog := s.progress.Label(req.Label)

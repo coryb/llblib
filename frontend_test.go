@@ -25,7 +25,7 @@ func TestCustomFrontend(t *testing.T) {
 
 	// We are building our custom frontend from ./examples/custom-frontend,
 	// within the same solve.
-	build := llblib.Image("golang:1.22", llb.Platform(currentPlatform)).Run(
+	build := llblib.Image("golang:1.24", llb.Platform(currentPlatform)).Run(
 		llb.Args([]string{"go", "build", "-C", "/src", "-o", "/out/frontend", "./examples/custom-frontend"}),
 		llb.AddMount("/out", llb.Scratch()),
 		llblib.AddCacheMounts(cachePaths, "go-cache", llb.CacheMountPrivate),

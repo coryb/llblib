@@ -22,7 +22,7 @@ func buildExample(r testRunner, opts ...llb.RunOption) llb.State {
 		Architecture: runtime.GOARCH,
 	}
 
-	return llblib.Image("golang:1.21", llb.Platform(currentPlatform)).Run(
+	return llblib.Image("golang:1.24", llb.Platform(currentPlatform)).Run(
 		llb.Args([]string{"go", "build", "-o", "build/", "./examples/build"}),
 		llb.Dir(r.WorkDir),
 		llb.AddMount(r.WorkDir, goSource(r.Solver)),

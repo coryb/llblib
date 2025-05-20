@@ -35,7 +35,7 @@ func WithChmod(mode os.FileMode) Chmod {
 
 // SetCopyOption implements the llb.CopyOption interface.
 func (c Chmod) SetCopyOption(ci *llb.CopyInfo) {
-	ci.Mode = (*os.FileMode)(&c)
+	ci.Mode = &llb.ChmodOpt{Mode: os.FileMode(c)}
 }
 
 // SetSSHOption implements the llb.SSHOption and ForwardOption interfaces.

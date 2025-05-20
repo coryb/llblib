@@ -458,7 +458,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	// By default, forward docker authentication through the session.
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	attachables = append(attachables, authprovider.NewDockerAuthProvider(dockerConfig, nil))
+	attachables = append(attachables, authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{ConfigFile: dockerConfig}))
 
 	// for each download we need a uniq session.  This is a hack, there has been
 	// some discussion for buildkit to have a session manager available to the
@@ -470,7 +470,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		sessionPerDownload = []bksess.Attachable{nil}
 	}
 	for _, attach := range sessionPerDownload {
-		bkSess, err := bksess.NewSession(ctx, "llblib", "")
+		bkSess, err := bksess.NewSession(ctx, "")
 		if err != nil {
 			return nil, errtrace.Errorf("failed to create buildkit session: %w", err)
 		}
