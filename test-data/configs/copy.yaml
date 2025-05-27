@@ -17,7 +17,7 @@ history:
       empty_layer: true
     - comment: llblib.v0
       created: "0001-01-01T00:00:00Z"
-      created_by: COPY 44313730cf537c6f661eaa430c6b9124a51343553ae19520d9436cc5d7339988:/file1 /copied
+      created_by: COPY a977a9549b72bb8ec6ce3776b76801089c4c1130beccb7f7364da9c2567bd8b0:/file1 /copied
 os: linux
 rootfs:
     diff_ids:

@@ -1,7 +1,6 @@
 package llblib
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 	mdispec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // Digest returns the digest for the state.
@@ -48,11 +48,15 @@ func MarshalWithImageConfig(ctx context.Context, st llb.State) (*llb.Definition,
 
 // BuildDefinition builds a definition and returns a state.
 func BuildDefinition(def *llb.Definition) llb.State {
-	buf := bytes.Buffer{}
-	llb.WriteTo(def, &buf)
+	// Ensure the definition is deterministic by using proto.MarshalOptions.
+	// llb.WriteTo does not use deterministic marshalling.
+	b, err := proto.MarshalOptions{Deterministic: true}.Marshal(def.ToPB())
+	if err != nil {
+		panic(err)
+	}
 
 	st := llb.Scratch().File(
-		llb.Mkfile(pb.LLBDefinitionInput, 0o644, buf.Bytes()),
+		llb.Mkfile(pb.LLBDefinitionInput, 0o644, b),
 	).With(llbbuild.Build())
 
 	if def.Constraints != nil {
