@@ -3,13 +3,13 @@ package llblib
 import (
 	"context"
 	"encoding/json"
+	"maps"
 
 	"braces.dev/errtrace"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
-	"golang.org/x/exp/maps"
 )
 
 // FrontendOption can be used to modify a Frontend request.

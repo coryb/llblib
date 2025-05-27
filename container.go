@@ -347,7 +347,7 @@ func applyExecInfo(exec *pb.ExecOp, ei llb.ExecInfo) {
 	// we marshal because they are private fields.
 	for _, s := range ei.Secrets {
 		exec.Mounts = append(exec.Mounts, &pb.Mount{
-			Dest:      s.Target,
+			Dest:      *s.Target,
 			MountType: pb.MountType_SECRET,
 			SecretOpt: &pb.SecretOpt{
 				ID:       s.ID,

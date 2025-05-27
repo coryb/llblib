@@ -1,8 +1,9 @@
 package llblib
 
 import (
+	"maps"
+
 	"github.com/moby/buildkit/client/llb"
-	"golang.org/x/exp/maps"
 )
 
 // MountPropagator manages a collection of llb.States and run Mounts. As
@@ -100,7 +101,7 @@ func (pm *persistentMounts) Add(opts ...llb.RunOption) {
 	pm.opts = append(pm.opts, opts...)
 }
 
-func (pm persistentMounts) Copy() MountPropagator {
+func (pm *persistentMounts) Copy() MountPropagator {
 	newPM := &persistentMounts{
 		root:   pm.root,
 		opts:   make([]llb.RunOption, len(pm.opts)),
@@ -174,11 +175,11 @@ func (ro mountPropagatorRunOption) SetRunOption(ei *llb.ExecInfo) {
 	ei.SSH = append(ei.SSH, ro.ei.SSH...)
 }
 
-func (pm persistentMounts) Root() llb.State {
+func (pm *persistentMounts) Root() llb.State {
 	return pm.root
 }
 
-func (pm persistentMounts) GetMount(mountpoint string) (llb.State, bool) {
+func (pm *persistentMounts) GetMount(mountpoint string) (llb.State, bool) {
 	st, ok := pm.states[mountpoint]
 	if !ok {
 		return llb.Scratch(), false

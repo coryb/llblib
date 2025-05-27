@@ -124,6 +124,6 @@ func (w *tWriter) Close() error {
 	return errtrace.Wrap(w.reader.Close())
 }
 
-func (w tWriter) Write(p []byte) (n int, err error) {
+func (w *tWriter) Write(p []byte) (n int, err error) {
 	return errtrace.Wrap2(w.writer.Write(p))
 }

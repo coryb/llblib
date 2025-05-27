@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"braces.dev/errtrace"
 	"github.com/coryb/llblib/progress"
@@ -12,7 +13,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
-	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
 
@@ -95,12 +95,17 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 		attachables = append(attachables, req.download)
 	}
 
+	entitlements := make([]string, len(req.entitlements))
+	for i, e := range req.entitlements {
+		entitlements[i] = e.String()
+	}
+
 	solveOpt := client.SolveOpt{
 		SharedSession:         sess,
 		SessionPreInitialized: true,
 		LocalDirs:             s.localDirs,
 		Session:               attachables,
-		AllowedEntitlements:   req.entitlements,
+		AllowedEntitlements:   entitlements,
 	}
 
 	prog := s.progress.Label(req.Label)

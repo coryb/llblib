@@ -43,7 +43,7 @@ func TestDockerLoad(t *testing.T) {
 	var eg errgroup.Group
 	eg.Go(func() error {
 		defer reader.Close()
-		resp, err := dockerClient.ImageLoad(r.Context, reader, true)
+		resp, err := dockerClient.ImageLoad(r.Context, reader, client.ImageLoadWithQuiet(true))
 		if err != nil {
 			return errtrace.Errorf("failed to download image: %w", err)
 		}

@@ -3,6 +3,8 @@ package llblib
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,7 +15,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
-	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,11 +23,11 @@ import (
 func ToYAML(ctx context.Context, states ...llb.State) (*yaml.Node, error) {
 	counter := 0
 	g := graphState{
-		ops:          map[digest.Digest]*pb.Op{},
-		meta:         map[digest.Digest]pb.OpMetadata{},
-		cache:        map[digest.Digest]*yaml.Node{},
+		ops:          map[string]*pb.Op{},
+		meta:         map[string]*pb.OpMetadata{},
+		cache:        map[string]*yaml.Node{},
 		outputs:      map[string]*yaml.Node{},
-		aliases:      map[digest.Digest]string{},
+		aliases:      map[string]string{},
 		aliasCounter: &counter,
 	}
 
@@ -97,11 +98,11 @@ func ToYAML(ctx context.Context, states ...llb.State) (*yaml.Node, error) {
 }
 
 type graphState struct {
-	ops          map[digest.Digest]*pb.Op
-	meta         map[digest.Digest]pb.OpMetadata
-	cache        map[digest.Digest]*yaml.Node
+	ops          map[string]*pb.Op
+	meta         map[string]*pb.OpMetadata
+	cache        map[string]*yaml.Node
 	outputs      map[string]*yaml.Node
-	aliases      map[digest.Digest]string
+	aliases      map[string]string
 	aliasCounter *int
 }
 
@@ -115,7 +116,7 @@ func (g graphState) newGraph(def *pb.Definition) (*pb.Input, graphState, error) 
 				return nil, graphState{}, errtrace.Wrap(err)
 			}
 			dgst = digest.FromBytes(dt)
-			ops[dgst] = &pbOp
+			ops[dgst.String()] = &pbOp
 		}
 	}
 	meta := maps.Clone(g.meta)
@@ -133,7 +134,7 @@ func (g graphState) newGraph(def *pb.Definition) (*pb.Input, graphState, error) 
 			aliasCounter: g.aliasCounter,
 		}, nil
 	}
-	terminal := ops[dgst]
+	terminal := ops[dgst.String()]
 	return terminal.Inputs[0], graphState{
 		ops:          ops,
 		meta:         meta,
@@ -143,7 +144,7 @@ func (g graphState) newGraph(def *pb.Definition) (*pb.Input, graphState, error) 
 	}, nil
 }
 
-func (g graphState) anchorName(d digest.Digest) string {
+func (g graphState) anchorName(d string) string {
 	if name, ok := g.aliases[d]; ok {
 		return name
 	}
@@ -215,7 +216,7 @@ func yamlAddMap(n *yaml.Node, name string, m map[string]string, opts ...yamlOpt)
 		return
 	}
 	attrs := walky.NewMappingNode()
-	keys := maps.Keys(m)
+	keys := slices.Collect(maps.Keys(m))
 	sort.Strings(keys)
 	for _, key := range keys {
 		yamlMapAdd(attrs,
@@ -437,7 +438,7 @@ func (g graphState) yamlMount(op *pb.Op, m *pb.Mount) (*yaml.Node, error) {
 	yamlAddKV(mount, "type", m.MountType)
 	if m.MountType == pb.MountType_BIND && !m.Readonly {
 		// CACHE, SECRET, SSH, TMPFS mounts dont have outputs
-		yamlAddInt(mount, "output", int64(m.Output))
+		yamlAddInt(mount, "output", m.Output)
 	}
 	yamlAddBool(mount, "readonly", m.Readonly)
 	yamlAddKV(mount, "source-path", m.Selector)
@@ -495,7 +496,7 @@ func (g graphState) yamlSourceOp(s *pb.SourceOp) *yaml.Node {
 	return node
 }
 
-func (g graphState) yamlFileOp(dgst digest.Digest, op *pb.Op, f *pb.FileOp) (*yaml.Node, error) {
+func (g graphState) yamlFileOp(dgst string, op *pb.Op, f *pb.FileOp) (*yaml.Node, error) {
 	node := walky.NewMappingNode()
 	yamlAddKV(node, "type", "FILE")
 	actions := walky.NewSequenceNode()

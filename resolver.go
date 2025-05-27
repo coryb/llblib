@@ -41,7 +41,7 @@ func (r *resolver) ResolveImageConfig(ctx context.Context, ref string, opt sourc
 		} else {
 			// By default, forward docker authentication through the session.
 			dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-			opts.Session = []bksess.Attachable{authprovider.NewDockerAuthProvider(dockerConfig, nil)}
+			opts.Session = []bksess.Attachable{authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{ConfigFile: dockerConfig})}
 		}
 		var (
 			d      digest.Digest

@@ -7,46 +7,51 @@
               path: /buildkit.llb.definition
               mode: "0o644"
               data: !!binary |
-                CkUaMQovZG9ja2VyLWltYWdlOi8vZG9ja2VyLmlvL2xpYnJhcnkvYnVzeWJveDpsYXRlc3
-                RSDgoFYW1kNjQSBWxpbnV4WgAKggIKSQpHc2hhMjU2OjA4YTAzZjNmZmU1ZmJhNDIxYTY0
-                MDNjMzFlMTUzNDI1Y2VkNjMxZDEwODg2OGYzMGUwNDk4NWY5OWQ2OTMyNmUSogEKOAoDY2
-                F0Cg4vdG1wL3VuaXguc29jaxIcU1NIX0FVVEhfU09DSz0vdG1wL3VuaXguc29jaxoBL1gB
-                EgMaAS8SYRoOL3RtcC91bml4LnNvY2swArIBTApHc2hhMjU2OjFiZTJlNGJiZDk1YWU5OT
-                IzZWNiYzkzOGMyNzI1OGRkMzQyNzA5ODhhODkyZjcyMTgxMTI4M2I1NDEwMTZiMmIggANS
-                DgoFYW1kNjQSBWxpbnV4WgAKSwpJCkdzaGEyNTY6Y2EzZDc4ZjI1YzRmNGVjM2I4MzYzZj
-                M1M2UzZDg0NTU3M2ZlYzBmMjg0ZGQ1YWMzYjYzZDI1YmE0Njc5NWRhNRLWAwpHc2hhMjU2
-                OjA4YTAzZjNmZmU1ZmJhNDIxYTY0MDNjMzFlMTUzNDI1Y2VkNjMxZDEwODg2OGYzMGUwND
-                k4NWY5OWQ2OTMyNmUSigMS9QIKEmxsYmxpYi5pbWFnZWNvbmZpZxLeAnsiY3JlYXRlZCI6
-                IjIwMjMtMDUtMThUMjI6MzQ6MTdaIiwiYXJjaGl0ZWN0dXJlIjoiYW1kNjQiLCJvcyI6Im
-                xpbnV4Iiwicm9vdGZzIjp7InR5cGUiOiJsYXllcnMiLCJkaWZmX2lkcyI6WyJzaGEyNTY6
-                ZDUxYWY5NmNmOTNlMjI1ODI1ZWZkNDg0ZWE0NTdmODY3Y2IyYjk2N2Y3NDE1YjlhM2I3ZT
-                Y1YTJmODAzODM4YSJdfSwiY29uZmlnIjp7IkNtZCI6WyJzaCJdfSwiY29udGFpbmVyX2Nv
-                bmZpZyI6eyJDbWQiOlsic2giXSwiTGFiZWxzIjp7fX0sImhpc3RvcnkiOlt7ImNyZWF0ZW
-                QiOiIyMDIzLTA1LTE4VDIyOjM0OjE3WiIsImNyZWF0ZWRfYnkiOiJCdXN5Qm94IDEuMzYu
-                MSAoZ2xpYmMpLCBEZWJpYW4gMTIifV19KhAKDHNvdXJjZS5pbWFnZRABEoEECkdzaGEyNT
-                Y6Y2EzZDc4ZjI1YzRmNGVjM2I4MzYzZjM1M2UzZDg0NTU3M2ZlYzBmMjg0ZGQ1YWMzYjYz
-                ZDI1YmE0Njc5NWRhNRK1AxL1AgoSbGxibGliLmltYWdlY29uZmlnEt4CeyJjcmVhdGVkIj
-                oiMjAyMy0wNS0xOFQyMjozNDoxN1oiLCJhcmNoaXRlY3R1cmUiOiJhbWQ2NCIsIm9zIjoi
-                bGludXgiLCJyb290ZnMiOnsidHlwZSI6ImxheWVycyIsImRpZmZfaWRzIjpbInNoYTI1Nj
-                pkNTFhZjk2Y2Y5M2UyMjU4MjVlZmQ0ODRlYTQ1N2Y4NjdjYjJiOTY3Zjc0MTViOWEzYjdl
-                NjVhMmY4MDM4MzhhIl19LCJjb25maWciOnsiQ21kIjpbInNoIl19LCJjb250YWluZXJfY2
-                9uZmlnIjp7IkNtZCI6WyJzaCJdLCJMYWJlbHMiOnt9fSwiaGlzdG9yeSI6W3siY3JlYXRl
-                ZCI6IjIwMjMtMDUtMThUMjI6MzQ6MTdaIiwiY3JlYXRlZF9ieSI6IkJ1c3lCb3ggMS4zNi
-                4xIChnbGliYyksIERlYmlhbiAxMiJ9XX0qEgoOZXhlYy5tZXRhLmJhc2UQASoTCg9leGVj
-                Lm1vdW50LmJpbmQQASoSCg5leGVjLm1vdW50LnNzaBABEoABCkdzaGEyNTY6ZDlmNjg3NT
-                RhZGM1ZjE4NzljNmY4NWFhZmEzYTQ0NzZlODYxODYxODNhNTFjOTBmMzQ0OWJiNTJiZDBm
-                NTU5ZBI1Kg8KC2NvbnN0cmFpbnRzEAEqFAoQbWV0YS5kZXNjcmlwdGlvbhABKgwKCHBsYX
-                Rmb3JtEAEamgEKSwpHc2hhMjU2OjA4YTAzZjNmZmU1ZmJhNDIxYTY0MDNjMzFlMTUzNDI1
-                Y2VkNjMxZDEwODg2OGYzMGUwNDk4NWY5OWQ2OTMyNmUSAApLCkdzaGEyNTY6Y2EzZDc4Zj
-                I1YzRmNGVjM2I4MzYzZjM1M2UzZDg0NTU3M2ZlYzBmMjg0ZGQ1YWMzYjYzZDI1YmE0Njc5
-                NWRhNRIA
+                CoYBUg4KBWFtZDY0EgVsaW51eFoAGnIKcGRvY2tlci1pbWFnZTovL2RvY2tlci5pby9saW
+                JyYXJ5L2J1c3lib3hAc2hhMjU2OjIzODQ5N2Y5MWU1MTgxNmZjNmFiZThhY2Q1Mjc2YzE1
+                NmNhZDMxYzM4MTk3MzE4ZjNlOGU1MjQyYWFlODMzMmUK0AIKSQpHc2hhMjU2OmMxZGRlMT
+                RlZWM1YzI1ZGM1ZGU4YThlNjRiNmVjMDJmODliNzRmMjViYmViMDA3ODhjMmNjMmRlYWE1
+                MWU2M2VSDgoFYW1kNjQSBWxpbnV4WgAS8AEKewoDY2F0Cg4vdG1wL3VuaXguc29jaxJBUE
+                FUSD0vdXNyL2xvY2FsL3NiaW46L3Vzci9sb2NhbC9iaW46L3Vzci9zYmluOi91c3IvYmlu
+                Oi9zYmluOi9iaW4SHFNTSF9BVVRIX1NPQ0s9L3RtcC91bml4LnNvY2saAS9YARIDGgEvEm
+                wI////////////ARoOL3RtcC91bml4LnNvY2swArIBTApHc2hhMjU2OjFiZTJlNGJiZDk1
+                YWU5OTIzZWNiYzkzOGMyNzI1OGRkMzQyNzA5ODhhODkyZjcyMTgxMTI4M2I1NDEwMTZiMm
+                IggAMKSwpJCkdzaGEyNTY6OTg0ZjdmZmM0ZjVhYTRkOTY0YjFjNmExYmI5YmViNmE3ODYz
+                NDhiMzliOWM0NGI1YzVhYmNjZjQxNjk2YTY5YRKAAQpHc2hhMjU2OjNiYzUyYjRhNDZmNT
+                RhYzQ3YWNjNTYxYTc1MmMwOGFlZDczNDZjZmNjMzE3MDFmMDg5NWFjMGMwYTg3ZTE4ZjIS
+                NSoPCgtjb25zdHJhaW50cxABKhQKEG1ldGEuZGVzY3JpcHRpb24QASoMCghwbGF0Zm9ybR
+                ABEs0ECkdzaGEyNTY6OTg0ZjdmZmM0ZjVhYTRkOTY0YjFjNmExYmI5YmViNmE3ODYzNDhi
+                MzliOWM0NGI1YzVhYmNjZjQxNjk2YTY5YRKBBBLBAwoSbGxibGliLmltYWdlY29uZmlnEq
+                oDeyJjcmVhdGVkIjoiMjAyMy0wNS0xOFQyMjozNDoxN1oiLCJhcmNoaXRlY3R1cmUiOiJh
+                bWQ2NCIsIm9zIjoibGludXgiLCJyb290ZnMiOnsidHlwZSI6ImxheWVycyIsImRpZmZfaW
+                RzIjpbInNoYTI1NjoyY2RmYzY3YzA4MTZjMmI3MDE1MDgxMjU5ZWI2YWM0MzdiOTA4Mjhl
+                ZjJhODYyZTY4OWIxM2FmYzE0YTJhNGFiIl19LCJjb25maWciOnsiRW52IjpbIlBBVEg9L3
+                Vzci9sb2NhbC9zYmluOi91c3IvbG9jYWwvYmluOi91c3Ivc2JpbjovdXNyL2Jpbjovc2Jp
+                bjovYmluIl0sIkNtZCI6WyJzaCJdfSwiY29udGFpbmVyX2NvbmZpZyI6eyJDbWQiOlsic2
+                giXSwiTGFiZWxzIjp7fX0sImhpc3RvcnkiOlt7ImNyZWF0ZWQiOiIyMDIzLTA1LTE4VDIy
+                OjM0OjE3WiIsImNyZWF0ZWRfYnkiOiJCdXN5Qm94IDEuMzYuMSAoZ2xpYmMpLCBEZWJpYW
+                4gMTIifV19KhIKDmV4ZWMubWV0YS5iYXNlEAEqEwoPZXhlYy5tb3VudC5iaW5kEAEqEgoO
+                ZXhlYy5tb3VudC5zc2gQARKiBApHc2hhMjU2OmMxZGRlMTRlZWM1YzI1ZGM1ZGU4YThlNj
+                RiNmVjMDJmODliNzRmMjViYmViMDA3ODhjMmNjMmRlYWE1MWU2M2US1gMSwQMKEmxsYmxp
+                Yi5pbWFnZWNvbmZpZxKqA3siY3JlYXRlZCI6IjIwMjMtMDUtMThUMjI6MzQ6MTdaIiwiYX
+                JjaGl0ZWN0dXJlIjoiYW1kNjQiLCJvcyI6ImxpbnV4Iiwicm9vdGZzIjp7InR5cGUiOiJs
+                YXllcnMiLCJkaWZmX2lkcyI6WyJzaGEyNTY6MmNkZmM2N2MwODE2YzJiNzAxNTA4MTI1OW
+                ViNmFjNDM3YjkwODI4ZWYyYTg2MmU2ODliMTNhZmMxNGEyYTRhYiJdfSwiY29uZmlnIjp7
+                IkVudiI6WyJQQVRIPS91c3IvbG9jYWwvc2JpbjovdXNyL2xvY2FsL2JpbjovdXNyL3NiaW
+                46L3Vzci9iaW46L3NiaW46L2JpbiJdLCJDbWQiOlsic2giXX0sImNvbnRhaW5lcl9jb25m
+                aWciOnsiQ21kIjpbInNoIl0sIkxhYmVscyI6e319LCJoaXN0b3J5IjpbeyJjcmVhdGVkIj
+                oiMjAyMy0wNS0xOFQyMjozNDoxN1oiLCJjcmVhdGVkX2J5IjoiQnVzeUJveCAxLjM2LjEg
+                KGdsaWJjKSwgRGViaWFuIDEyIn1dfSoQCgxzb3VyY2UuaW1hZ2UQARqaAQpLCkdzaGEyNT
+                Y6OTg0ZjdmZmM0ZjVhYTRkOTY0YjFjNmExYmI5YmViNmE3ODYzNDhiMzliOWM0NGI1YzVh
+                YmNjZjQxNjk2YTY5YRIACksKR3NoYTI1NjpjMWRkZTE0ZWVjNWMyNWRjNWRlOGE4ZTY0Yj
+                ZlYzAyZjg5Yjc0ZjI1YmJlYjAwNzg4YzJjYzJkZWFhNTFlNjNlEgA=
               input:
                 type: SOURCE
                 source: scratch
   build:
     type: EXEC
     args: [cat, /tmp/unix.sock]
-    env: [SSH_AUTH_SOCK=/tmp/unix.sock]
+    env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', SSH_AUTH_SOCK=/tmp/unix.sock]
     cwd: /
     mounts:
         - mountpoint: /
@@ -54,7 +59,7 @@
           output: 0
           input:
             type: SOURCE
-            source: docker-image://docker.io/library/busybox:latest
+            source: docker-image://docker.io/library/busybox@sha256:238497f91e51816fc6abe8acd5276c156cad31c38197318f3e8e5242aae8332e
             platform: linux/amd64
         - mountpoint: /tmp/unix.sock
           type: SSH

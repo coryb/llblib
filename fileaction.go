@@ -9,7 +9,7 @@ import (
 // Mode is an llb.CopyOption to set the file mode of the copied file.
 func Mode(m os.FileMode) llb.CopyOption {
 	return copyOptionFunc(func(ci *llb.CopyInfo) {
-		ci.Mode = &m
+		ci.Mode = &llb.ChmodOpt{Mode: m}
 	})
 }
 

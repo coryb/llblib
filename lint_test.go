@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const GolangCILintVersion = "v1.58.1"
+const GolangCILintVersion = "v1.64.6"
 
 func goSource(s llblib.Solver) llb.State {
 	return s.Local(".", llb.IncludePatterns([]string{

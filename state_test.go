@@ -74,7 +74,6 @@ func TestImageConfigMods(t *testing.T) {
 		name: "def",
 		base: llblib.BuildDefinition(def),
 	}} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			testImageConfigMods(t, tt.base)
 		})
@@ -225,7 +224,6 @@ func testImageConfigMods(t *testing.T, base llb.State) {
 			)
 		},
 	}} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			r := newTestRunner(t, withTimeout(60*time.Second))

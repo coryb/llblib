@@ -22,7 +22,7 @@ func TestYAML(t *testing.T) {
 	r := newTestRunner(t, withTimeout(60*time.Second))
 
 	def, err := llblib.MarshalWithImageConfig(context.Background(),
-		llblib.Image("busybox", llb.LinuxAmd64).Run(
+		llblib.Image("busybox@sha256:238497f91e51816fc6abe8acd5276c156cad31c38197318f3e8e5242aae8332e", llb.LinuxAmd64).Run(
 			llb.Args([]string{"cat", "/tmp/unix.sock"}),
 			r.Solver.Forward("unix://./unix.sock", "/tmp/unix.sock"),
 		).Root(),
@@ -177,7 +177,7 @@ func TestYAML(t *testing.T) {
 		expected: "dockerfile-user",
 	}, {
 		states: states(
-			llblib.Image("busybox", llb.LinuxAmd64).Run(
+			llblib.Image("busybox@sha256:238497f91e51816fc6abe8acd5276c156cad31c38197318f3e8e5242aae8332e", llb.LinuxAmd64).Run(
 				llb.Shlex("cat /secret"),
 				r.Solver.AddSecretFile("yaml_test.go", "/secret"),
 			).Root(),
@@ -185,14 +185,14 @@ func TestYAML(t *testing.T) {
 		expected: "secrets",
 	}, {
 		states: states(
-			llblib.Image("busybox", llb.LinuxAmd64).Run(
+			llblib.Image("busybox@sha256:238497f91e51816fc6abe8acd5276c156cad31c38197318f3e8e5242aae8332e", llb.LinuxAmd64).Run(
 				llb.Args([]string{"/bin/sh", "-c", "echo multi\necho line\necho statement"}),
 			).Root(),
 		),
 		expected: "script",
 	}, {
 		states: states(
-			llblib.Image("busybox", llb.LinuxAmd64).Run(
+			llblib.Image("busybox@sha256:238497f91e51816fc6abe8acd5276c156cad31c38197318f3e8e5242aae8332e", llb.LinuxAmd64).Run(
 				llb.Args([]string{"cat", "/tmp/unix.sock"}),
 				r.Solver.Forward("unix://./unix.sock", "/tmp/unix.sock"),
 			).Root(),
@@ -221,7 +221,6 @@ func TestYAML(t *testing.T) {
 		),
 		expected: "def",
 	}} {
-		tt := tt
 		t.Run(tt.expected, func(t *testing.T) {
 			t.Parallel()
 			sess := r.Session(t)

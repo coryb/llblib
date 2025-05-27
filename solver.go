@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -27,7 +29,6 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/tonistiigi/fsutil"
 	fstypes "github.com/tonistiigi/fsutil/types"
-	"golang.org/x/exp/maps"
 )
 
 // Solver provides functions used to create and execute buildkit solve requests.
@@ -440,7 +441,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	// Attach secret providers to the session.
 	if len(s.secrets) > 0 {
-		fileStore, err := secretsprovider.NewStore(maps.Values(s.secrets))
+		fileStore, err := secretsprovider.NewStore(slices.Collect(maps.Values(s.secrets)))
 		if err != nil {
 			return nil, errtrace.Wrap(err)
 		}
@@ -449,7 +450,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	// Attach ssh forwarding providers to the session.
 	if len(s.agentConfigs) > 0 {
-		sp, err := sockproxy.NewProvider(maps.Values(s.agentConfigs))
+		sp, err := sockproxy.NewProvider(slices.Collect(maps.Values(s.agentConfigs)))
 		if err != nil {
 			return nil, errtrace.Errorf("failed to create provider for forward: %w", err)
 		}
@@ -458,7 +459,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	// By default, forward docker authentication through the session.
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	attachables = append(attachables, authprovider.NewDockerAuthProvider(dockerConfig, nil))
+	attachables = append(attachables, authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{ConfigFile: dockerConfig}))
 
 	// for each download we need a uniq session.  This is a hack, there has been
 	// some discussion for buildkit to have a session manager available to the
@@ -470,7 +471,7 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 		sessionPerDownload = []bksess.Attachable{nil}
 	}
 	for _, attach := range sessionPerDownload {
-		bkSess, err := bksess.NewSession(ctx, "llblib", "")
+		bkSess, err := bksess.NewSession(ctx, "")
 		if err != nil {
 			return nil, errtrace.Errorf("failed to create buildkit session: %w", err)
 		}
@@ -486,7 +487,6 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	waiters := []chan struct{}{}
 
 	for _, bkSess := range allSessions {
-		bkSess := bkSess
 		alive := make(chan struct{})
 		waiters = append(waiters, alive)
 		go func() {
