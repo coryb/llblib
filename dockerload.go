@@ -27,3 +27,14 @@ func DockerSave(ref reference.Reference, output io.WriteCloser) RequestOption {
 		)
 	})
 }
+
+func DockerLink(ref reference.Reference) RequestOption {
+	return requestOptionFunc(func(r *Request) {
+		r.exports = append(r.exports, client.ExportEntry{
+			Type: client.ExporterImage,
+			Attrs: map[string]string{
+				"name": ref.String(),
+			},
+		})
+	})
+}

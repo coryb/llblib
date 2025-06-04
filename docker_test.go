@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/coryb/llblib"
+	"github.com/distribution/reference"
 	"github.com/moby/buildkit/client/llb"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -146,7 +147,9 @@ func TestDockerfileBuildContexts(t *testing.T) {
 		llblib.WithBuildContext("extra", st1),
 	)
 
-	req := r.Solver.Build(st)
+	ref, err := reference.Parse("llblib-test/dockerfile-build-contexts")
+	require.NoError(t, err)
+	req := r.Solver.Build(st, llblib.DockerExport(ref))
 	_, err = r.Run(t, req)
 	require.NoError(t, err)
 }
