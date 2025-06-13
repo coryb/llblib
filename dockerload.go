@@ -27,3 +27,15 @@ func DockerSave(ref reference.Reference, output io.WriteCloser) RequestOption {
 		)
 	})
 }
+
+// DockerTag will tag the build state as a docker image with the given reference.
+func DockerTag(ref reference.Reference) RequestOption {
+	return requestOptionFunc(func(r *Request) {
+		r.exports = append(r.exports, client.ExportEntry{
+			Type: client.ExporterImage,
+			Attrs: map[string]string{
+				"name": ref.String(),
+			},
+		})
+	})
+}
