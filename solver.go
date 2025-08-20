@@ -3,7 +3,9 @@ package llblib
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"net"
@@ -15,6 +17,7 @@ import (
 	"time"
 
 	"braces.dev/errtrace"
+	"github.com/cespare/xxhash/v2"
 	"github.com/coryb/llblib/progress"
 	"github.com/coryb/llblib/sockproxy"
 	"github.com/docker/cli/cli/config"
@@ -165,7 +168,7 @@ func (s *solver) Local(name string, opts ...llb.LocalOption) llb.State {
 		)
 	}
 
-	if li.LocalUniqueID == "" {
+	if li.LocalUniqueID == "" || li.LocalUniqueID == ContentHashSentinel || isTracedContentHash(li.LocalUniqueID) {
 		id, err := localID(absPath, opts...)
 		if err != nil {
 			s.err = errtrace.Errorf("error calculating id for local: %w", err)
@@ -210,12 +213,12 @@ func localID(absPath string, opts ...llb.LocalOption) (string, error) {
 }
 
 // localUniqueID returns a consistent string that is unique per host + dir +
-// last modified time.
+// last modified time or content hash.
 //
 // If there is already a solve in progress using the same local dir, we want to
 // deduplicate the "local" if the directory hasn't changed, but if there has
 // been a change, we must not identify the "local" as a duplicate. Thus, we
-// incorporate the last modified timestamp into the result.
+// incorporate the last modified timestamp or content hash into the result.
 func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 	mac := firstUpInterface()
 
@@ -224,13 +227,32 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 		return "", errtrace.Wrap(err)
 	}
 
-	lastModified := fi.ModTime()
-	if fi.IsDir() {
-		var localInfo llb.LocalInfo
-		for _, opt := range opts {
-			opt.SetLocalOption(&localInfo)
+	// Check if content hashing is enabled by looking for the sentinel value
+	var localInfo llb.LocalInfo
+	for _, opt := range opts {
+		opt.SetLocalOption(&localInfo)
+	}
+
+	useContentHash := localInfo.LocalUniqueID == ContentHashSentinel
+	useTracedContentHash := isTracedContentHash(localInfo.LocalUniqueID)
+
+	if useContentHash || useTracedContentHash {
+		// Use content-based hashing (with optional tracing)
+		var traceWriter io.Writer
+		if useTracedContentHash {
+			traceWriter = extractTracedWriter(opts...)
 		}
 
+		contentHash, err := calculateContentHash(localPath, localInfo, traceWriter)
+		if err != nil {
+			return "", errtrace.Errorf("failed to calculate content hash: %w", err)
+		}
+		return fmt.Sprintf("path:%s,mac:%s,%016x", localPath, mac, contentHash), nil
+	}
+
+	// Use modification time based hashing
+	lastModified := fi.ModTime()
+	if fi.IsDir() {
 		var walkOpts fsutil.FilterOpt
 		if localInfo.IncludePatterns != "" {
 			if err := json.Unmarshal([]byte(localInfo.IncludePatterns), &walkOpts.IncludePatterns); err != nil {
@@ -260,6 +282,185 @@ func localUniqueID(localPath string, opts ...llb.LocalOption) (string, error) {
 	}
 
 	return fmt.Sprintf("path:%s,mac:%s,modified:%s", localPath, mac, lastModified.Format(time.RFC3339Nano)), nil
+}
+
+// bufferPool reuses 64KB buffers to avoid repeated allocations during content hashing
+var bufferPool = sync.Pool{
+	New: func() any {
+		return make([]byte, 65536) // 64KB buffer
+	},
+}
+
+// calculateContentHash computes a fast xxhash of file contents in the given path
+// with optional tracing output
+func calculateContentHash(localPath string, localInfo llb.LocalInfo, trace io.Writer) (uint64, error) {
+	hasher := xxhash.New()
+
+	if trace != nil {
+		fmt.Fprintf(trace, "=== Content Hash Trace for %s ===\n", localPath)
+	}
+
+	fi, err := os.Stat(localPath)
+	if err != nil {
+		return 0, errtrace.Wrap(err)
+	}
+
+	if !fi.IsDir() {
+		// Single file - hash mode + content
+		if trace != nil {
+			fmt.Fprintf(trace, "File: %s (mode: %o)\n", localPath, fi.Mode())
+		}
+		hasher.Write([]byte{byte(fi.Mode() >> 24), byte(fi.Mode() >> 16), byte(fi.Mode() >> 8), byte(fi.Mode())})
+		result, err := hashSingleFile(hasher, localPath, trace)
+		if trace != nil && err == nil {
+			fmt.Fprintf(trace, "Final hash: %016x\n", result)
+			fmt.Fprintf(trace, "=== End Trace ===\n\n")
+		}
+		return result, err
+	}
+
+	// Directory - parse filter options and walk files
+	var walkOpts fsutil.FilterOpt
+	if localInfo.IncludePatterns != "" {
+		if err := json.Unmarshal([]byte(localInfo.IncludePatterns), &walkOpts.IncludePatterns); err != nil {
+			return 0, errtrace.Errorf("failed to unmarshal IncludePatterns for content hash: %w", err)
+		}
+	}
+	if localInfo.ExcludePatterns != "" {
+		if err := json.Unmarshal([]byte(localInfo.ExcludePatterns), &walkOpts.ExcludePatterns); err != nil {
+			return 0, errtrace.Errorf("failed to unmarshal ExcludePatterns for content hash: %w", err)
+		}
+	}
+	if localInfo.FollowPaths != "" {
+		if err := json.Unmarshal([]byte(localInfo.FollowPaths), &walkOpts.FollowPaths); err != nil {
+			return 0, errtrace.Errorf("failed to unmarshal FollowPaths for content hash: %w", err)
+		}
+	}
+
+	err = fsutil.Walk(context.Background(), localPath, &walkOpts, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		// Hash the relative path first for deterministic ordering
+		if trace != nil {
+			fmt.Fprintf(trace, "File: %s (mode: %o)\n", path, info.Mode())
+		}
+		hasher.WriteString(path)
+
+		// Hash file mode (permissions) - important for file identity
+		hasher.Write([]byte{byte(info.Mode() >> 24), byte(info.Mode() >> 16), byte(info.Mode() >> 8), byte(info.Mode())})
+
+		// Then hash file content (first, middle, last chunks)
+		fullPath := filepath.Join(localPath, path)
+		if current, err := hashSingleFile(hasher, fullPath, trace); err != nil {
+			return err
+		} else if trace != nil {
+			fmt.Fprintf(trace, "  Current hash: %016x\n", current)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return 0, errtrace.Wrap(err)
+	}
+
+	result := hasher.Sum64()
+	if trace != nil {
+		fmt.Fprintf(trace, "Final hash: %016x\n", result)
+		fmt.Fprintf(trace, "=== End Trace ===\n\n")
+	}
+
+	return result, nil
+}
+
+// hashSingleFile reads and hashes the first, middle, and last chunks of a file
+// for better change detection while maintaining performance
+func hashSingleFile(hasher *xxhash.Digest, filePath string, trace io.Writer) (uint64, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, errtrace.Wrap(err)
+	}
+	defer file.Close()
+
+	// Get file size
+	info, err := file.Stat()
+	if err != nil {
+		return 0, errtrace.Wrap(err)
+	}
+	fileSize := info.Size()
+
+	// Get buffer from pool to avoid allocation
+	buffer := bufferPool.Get().([]byte)
+	defer bufferPool.Put(buffer)
+
+	chunkSize := int64(len(buffer)) // Use actual buffer size from pool
+
+	if trace != nil {
+		fmt.Fprintf(trace, "  Size: %d bytes, Chunk size: %d bytes\n", fileSize, chunkSize)
+	}
+
+	// For small files, read the entire file
+	if fileSize <= chunkSize {
+		n, err := file.Read(buffer[:fileSize])
+		if err != nil && !errors.Is(err, io.EOF) {
+			return 0, errtrace.Wrap(err)
+		}
+		if trace != nil {
+			fmt.Fprintf(trace, "  Read entire file: %d bytes\n", n)
+		}
+		hasher.Write(buffer[:n])
+		return hasher.Sum64(), nil
+	}
+
+	// Read first chunk
+	n, err := file.Read(buffer)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, errtrace.Wrap(err)
+	}
+	if trace != nil {
+		fmt.Fprintf(trace, "  Read first chunk: %d bytes\n", n)
+	}
+	hasher.Write(buffer[:n])
+
+	// For larger files, also read middle and last chunks
+	if fileSize > chunkSize*2 {
+		middleOffset := (fileSize / 2) - (chunkSize / 2)
+		_, err = file.Seek(middleOffset, io.SeekStart)
+		if err != nil {
+			return 0, errtrace.Wrap(err)
+		}
+		n, err = file.Read(buffer)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return 0, errtrace.Wrap(err)
+		}
+		if trace != nil {
+			fmt.Fprintf(trace, "  Read middle chunk at offset %d: %d bytes\n", middleOffset, n)
+		}
+		hasher.Write(buffer[:n])
+	}
+
+	// Read last chunk
+	lastOffset := fileSize - chunkSize
+	_, err = file.Seek(lastOffset, io.SeekStart)
+	if err != nil {
+		return 0, errtrace.Wrap(err)
+	}
+
+	n, err = file.Read(buffer)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, errtrace.Wrap(err)
+	}
+	if trace != nil {
+		fmt.Fprintf(trace, "  Read last chunk at offset %d: %d bytes\n", lastOffset, n)
+	}
+	hasher.Write(buffer[:n])
+
+	return hasher.Sum64(), nil
 }
 
 // firstUpInterface returns the mac address for the first "UP" network
