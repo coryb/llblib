@@ -67,7 +67,7 @@ func (NullOption) SetImageOption(*llb.ImageInfo)         {} //nolint:revive
 func (NullOption) SetLocalOption(*llb.LocalInfo)         {} //nolint:revive
 func (NullOption) SetMkdirOption(*llb.MkdirInfo)         {} //nolint:revive
 func (NullOption) SetMkfileOption(*llb.MkfileInfo)       {} //nolint:revive
-func (NullOption) SetImageBlobOption(*llb.ImageBlobInfo)  {} //nolint:revive
+func (NullOption) SetImageBlobOption(*llb.ImageBlobInfo) {} //nolint:revive
 func (NullOption) SetOCILayoutOption(*llb.OCILayoutInfo) {} //nolint:revive
 func (NullOption) SetRequestOption(*Request)             {} //nolint:revive
 func (NullOption) SetRmOption(*llb.RmInfo)               {} //nolint:revive
