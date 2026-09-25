@@ -13,6 +13,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	bksess "github.com/moby/buildkit/session"
+	"github.com/tonistiigi/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,7 +36,7 @@ type Session interface {
 
 type session struct {
 	allSessions map[bksess.Attachable]*bksess.Session
-	localDirs   map[string]string
+	localMounts map[string]fsutil.FS
 	attachables []bksess.Attachable
 	releasers   []func() error
 	client      *client.Client
@@ -103,7 +104,7 @@ func (s *session) Do(ctx context.Context, req Request) (*client.SolveResponse, e
 	solveOpt := client.SolveOpt{
 		SharedSession:         sess,
 		SessionPreInitialized: true,
-		LocalDirs:             s.localDirs,
+		LocalMounts:           s.localMounts,
 		Session:               attachables,
 		AllowedEntitlements:   entitlements,
 	}

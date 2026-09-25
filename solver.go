@@ -417,26 +417,25 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 	}
 	attachables := []bksess.Attachable{}
 
-	dirSource := filesync.StaticDirSource{}
-	if len(s.localDirs) > 0 {
-		for name, localDir := range s.localDirs {
-			dirSourceFS, err := fsutil.NewFS(localDir)
-			if err != nil {
-				return nil, errtrace.Wrap(err)
-			}
-			dirSourceFS, err = fsutil.NewFilterFS(dirSourceFS, &fsutil.FilterOpt{
-				Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
-					st.Uid = 0
-					st.Gid = 0
-					return fsutil.MapResultKeep
-				},
-			})
-			if err != nil {
-				return nil, errtrace.Wrap(err)
-			}
-			dirSource[name] = dirSourceFS
+	localMounts := filesync.StaticDirSource{}
+	for name, localDir := range s.localDirs {
+		localFS, err := fsutil.NewFS(localDir)
+		if err != nil {
+			return nil, errtrace.Wrap(err)
 		}
-		attachables = append(attachables, filesync.NewFSSyncProvider(dirSource))
+		localMounts[name], err = fsutil.NewFilterFS(localFS, &fsutil.FilterOpt{
+			Map: func(_ string, st *fstypes.Stat) fsutil.MapResult {
+				st.Uid = 0
+				st.Gid = 0
+				return fsutil.MapResultKeep
+			},
+		})
+		if err != nil {
+			return nil, errtrace.Wrap(err)
+		}
+	}
+	if len(localMounts) > 0 {
+		attachables = append(attachables, filesync.NewFSSyncProvider(localMounts))
 	}
 
 	// Attach secret providers to the session.
@@ -508,14 +507,13 @@ func (s *solver) NewSession(ctx context.Context, cln *client.Client, p progress.
 
 	resolver := newResolver(cln, s.resolverCache, anyValue(allSessions), p)
 
-	localDirs := maps.Clone(s.localDirs)
 	return &session{
 		allSessions: allSessions,
 		attachables: attachables,
 		releasers:   releasers,
 		client:      cln,
 		isMoby:      isMoby,
-		localDirs:   localDirs,
+		localMounts: localMounts,
 		resolver:    resolver,
 		progress:    p,
 	}, nil
