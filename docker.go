@@ -135,20 +135,20 @@ func Dockerfile(dockerfile []byte, buildContext llb.State, opts ...DockerfileOpt
 }
 
 func directSolve(ctx context.Context, dockerfile []byte, opts DockerfileOpts) (llb.State, error) {
-	state, img, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
+	result, err := dockerfile2llb.Dockerfile2LLB(ctx, dockerfile, opts)
 	if err != nil {
 		return llb.Scratch(), errtrace.Wrap(err)
 	}
 	var history []History
-	for _, h := range img.History {
+	for _, h := range result.Image.History {
 		history = append(history, History{History: h})
 	}
 	imageConfig := ImageConfig{
-		DockerOCIImage: *img,
+		DockerOCIImage: *result.Image,
 		History:        history,
 	}
 	imageConfig.ContainerConfig = imageConfigToContainerConfig(imageConfig)
-	return withImageConfig(*state, &imageConfig), nil
+	return withImageConfig(result.State, &imageConfig), nil
 }
 
 const (
